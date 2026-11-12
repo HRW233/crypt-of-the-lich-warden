@@ -9,7 +9,7 @@ hero-specific range, and slides away from any hostile bullet within 36 px. Close
 (the knight and the pyromancer, whose embers die within ~60 px) are held at 26 px and 45 px;
 everyone else kites at 100-150 px.
 
-`v4.1` / `v4.2`, measured 2026-11-12.
+`v4.1` / `v4.2`, measured 2026-11-12. Relic-set numbers measured on `v4.4`.
 
 ## Clear time (seconds, lower is better)
 
@@ -76,4 +76,60 @@ The Cryomancer never died in any boss trial and finished the Devourer at 1% HP t
 suppresses the bullet patterns that kill everyone else. The Devourer is nobody's easy fight: the
 sniper and knight last longest but still lose to it, and the pyromancer dies in 6.9 s both times.
 
+## With a full relic set
+
+Same bot, same waves and bosses, but every hero starts with four relics - a full set, i.e. what a
+run looks like once all four slots are filled. Each hero's set is the build they would actually aim
+for, at the top tier of each chain:
+
+| Hero | Relics |
+|---|---|
+| MAGE | ARCANE MIGHT V, QUICK HANDS V, SPLIT BOLT, KEEN EYE IV |
+| WIZARD | ARCANE MIGHT V, QUICK HANDS V, CRIT POWER III, KEEN EYE IV |
+| SNIPER | ARCANE MIGHT V, QUICK HANDS V, CRIT POWER III, KEEN EYE IV |
+| KNIGHT | ARCANE MIGHT V, QUICK HANDS V, HEART CONTAINER V, CRIT POWER III |
+| PYROMANCER | CINDER TOUCH III, PYRE III, WILDFIRE II, ARCANE MIGHT V |
+| CRYOMANCER | FROSTBITE III, DEEP FREEZE III, GLACIER II, ARCANE MIGHT V |
+
+### Clear time with relics (seconds, two trials)
+
+| Hero | Floor 1 | Floor 3 | Floor 5 | bare F5 | speedup at F5 |
+|---|---|---|---|---|---|
+| MAGE | 4.4 | 5.8 | **6.9** | 17.0 | 2.5x |
+| SNIPER | 4.9 | 4.9 | 7.6 | 8.6 | 1.1x |
+| KNIGHT | 5.8 | 6.7 | 8.8 | 12.5 | 1.4x |
+| WIZARD | 4.5 | 7.1 | 9.8 | 15.8 | 1.6x |
+| CRYOMANCER | 4.8 | 10.2 | 11.3 | 19.0 | 1.7x |
+| PYROMANCER | 9.7 | 15.0 | 15.7 | 28.0 | 1.8x |
+
+Damage taken with a full set is 0-2 HP per wave for every hero.
+
+### Bosses with relics
+
+Two trials per cell; **K** = boss killed (seconds shown), **D** = died, **S** = survived the 60 s cap.
+
+| Hero | F2 Titan | F3 Choir | F4 Seraph | F5 Devourer |
+|---|---|---|---|---|
+| MAGE | K 9.0 | K 14.3 | D 13.2 / D 10.7 | D 10.8 / K 39.3 |
+| WIZARD | K 16.2 | K 23.0 | D 14.1 / D 13.3 | D 25.0 / D 41.9 |
+| SNIPER | K 12.2 | K 20.8 | K 25.6 / K 26.2 | D 19.4 / K 48.4 |
+| KNIGHT | K 11.6 | K 12.3 | D 17.4 / K 26.7 | D 26.5 / D 29.1 |
+| PYROMANCER | K 25.9 | K 43.5 | D 26.8 / D 29.0 | D 18.0 / D 22.1 |
+| CRYOMANCER | K 44.6 | S 60 (10% left) | S 60 / S 60 (47% left) | S 60 / S 60 (3% left) |
+
+With four relics the early and mid bosses stop being walls: every hero kills the Titan and the
+Choir, where the mage and wizard used to die to both. The **Obsidian Seraph** stays lethal to the
+mage, wizard and pyromancer even fully geared, and the **Devourer** is still a coin flip or worse
+for everyone except the sniper, whose burst is the only thing that races its finale.
+
 ## Reading the table
+
+- The **knight** and **sniper** are the strongest single-target heroes; the sniper's floor-5 number
+  swings between 5.6 s and 11.6 s because crits and ammo types dominate a short wave.
+- The **cryomancer** sits mid-pack and takes almost no damage, which is the point of the chill: she
+  buys safety rather than speed.
+- The **pyromancer** is the slowest in this test by a wide margin. The bot only holds the stream on
+  target between dodges, and her damage is a burn that needs contact time to stack, so a bot that
+  kites away loses most of it. Treat her row as a floor, not a fair reading.
+- Wave sizes here are smaller than a real pack, so AoE heroes (cryomancer, pyromancer) scale better
+  in actual rooms than these numbers suggest.
