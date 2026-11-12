@@ -5,8 +5,9 @@ Every hero fights the **same wave**: 6 cultist acolytes + 2 bone archers ringing
 No relics, MEDIUM difficulty, starting weapons only.
 
 The bot is the same for every hero: it aims at the nearest enemy, holds the trigger, kites to a
-hero-specific range, and slides away from any hostile bullet within 36 px. Close-range heroes
-(the knight and the pyromancer) are held at 26 px and 45-55 px; everyone else kites at 100-150 px.
+hero-specific range, and slides away from any hostile bullet within 36 px and any boss beam within
+26 px. Close-range heroes (the knight and the pyromancer) are held at 26 px and 55 px; everyone
+else kites at 100-150 px.
 
 Measured 2026-11-12: bare numbers on `v4.1` / `v4.2`, relic set and bosses on `v4.4`, the pass
 itself on `v4.5`.
@@ -147,10 +148,39 @@ The pyromancer went from 28 s to under 14 s on a floor-5 wave - no longer the wo
 Against the Devourer her survival went from 6.9 s twice to 34.4 s (death) and 60 s (alive, boss at
 30%), and she now kills the Obsidian Seraph in one of two trials.
 
+## Five-trial pass (v4.5)
+
+Five trials per cell, same bot and waves. Clear times are mean ± standard deviation.
+
+| Hero | Floor 1 | Floor 3 | Floor 5 |
+|---|---|---|---|
+| SNIPER | **6.1 ±0.5** | **10.1 ±1.7** | **10.8 ±0.9** |
+| KNIGHT | 7.3 ±0.4 | 10.1 ±0.3 | 12.1 ±1.1 |
+| WIZARD | 7.4 ±0.1 | 12.0 ±1.0 | 15.8 ±0.9 |
+| CRYOMANCER | 8.0 ±0.5 | 12.7 ±3.0 | 15.6 ±1.9 |
+| PYROMANCER | 8.3 ±1.2 | 12.1 ±0.8 | 14.6 ±1.0 |
+| MAGE | 8.6 ±0.5 | 12.7 ±0.7 | 15.4 ±4.0 |
+
+Boss fights, five trials per boss (60 s cap). **Mean seconds**, then deaths and kills out of 5:
+
+| Hero | F1 Warden | F2 Titan | F3 Choir | F4 Seraph | F5 Devourer |
+|---|---|---|---|---|---|
+| KNIGHT | 12.1 s, 0 d, 5 k | 17.7 s, 1 d, 4 k | 21.0 s, 0 d, 5 k | 40.5 s, 2 d, 3 k | 37.0 s, 5 d, 0 k |
+| PYROMANCER | 14.3 s, 0 d, 5 k | 20.0 s, 0 d, 5 k | 33.1 s, 2 d, 3 k | 31.2 s, 3 d, 2 k | 26.4 s, 4 d, 0 k |
+| SNIPER | 18.4 s, 0 d, 5 k | 35.6 s, 0 d, 5 k | 41.6 s, 0 d, 5 k | 50.9 s, 3 d, 0 k | 31.1 s, 5 d, 0 k |
+| WIZARD | 22.9 s, 0 d, 5 k | 32.5 s, 5 d, 0 k | 35.7 s, 3 d, 2 k | 21.8 s, 5 d, 0 k | 28.3 s, 5 d, 0 k |
+| MAGE | 25.1 s, 0 d, 5 k | 28.9 s, 5 d, 0 k | 50.6 s, 3 d, 2 k | 19.8 s, 5 d, 0 k | 23.3 s, 5 d, 0 k |
+| CRYOMANCER | 42.7 s, 0 d, 5 k | 60 s, 0 d, 0 k | 60 s, 0 d, 0 k | 60 s, 0 d, 0 k | 60 s, 0 d, 0 k |
+
+Cryomancer's Devourer runs ended at 28% HP every single trial and the Seraph at 20% every trial:
+the bosses' phase gates cap her steady damage, so silence is her kill count, not variance. The
+mage's 8.4 s floor-5 clear among five runs of 15.9-17.9 s is the other outlier worth noting.
+
 ## Reading the table
 
 - The **knight** and **sniper** are the strongest single-target heroes; the sniper's floor-5 number
-  swings between 5.6 s and 11.6 s because crits and ammo types dominate a short wave.
+  swings between 10.0 s and 11.7 s over five trials because crits and ammo types dominate a short
+  wave.
 - The **cryomancer** sits mid-pack and takes almost no damage, which is the point of the chill: she
   buys safety rather than speed.
 - The **pyromancer** was the slowest in the first pass by a wide margin: the bot only holds the
@@ -158,4 +188,5 @@ Against the Devourer her survival went from 6.9 s twice to 34.4 s (death) and 60
   v4.5 ember buffs closed most of that gap, but treat her row as a floor, not a fair reading.
 - Wave sizes here are smaller than a real pack, so AoE heroes (cryomancer, pyromancer) scale better
   in actual rooms than these numbers suggest.
-- Two trials per cell, and boss attack order is random, so individual cells swing by 30% or more.
+- Five trials still leaves floor-1 and floor-3 gaps of a second or less between most heroes, which
+  is inside one standard deviation; only the sniper/knight tier and the bosses separate cleanly.
