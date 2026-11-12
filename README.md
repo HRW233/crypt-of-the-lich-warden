@@ -1,6 +1,6 @@
 # Crypt of the Lich Warden
 
-A neon-arcane pixel bullet-hell roguelike that runs in a single browser tab. Five floors, five bosses, 159 relics and four playable classes. Current build: **v1.7** (shown in the bottom-right of the title screen).
+A neon-arcane pixel bullet-hell roguelike that runs in a single browser tab. Five floors, five bosses, 159 relics and four playable classes. Current build: **v1.9** (shown in the bottom-right of the title screen).
 
 ## Play
 
@@ -8,10 +8,12 @@ A neon-arcane pixel bullet-hell roguelike that runs in a single browser tab. Fiv
 
 ### Heroes
 
-- **MAGE** - balanced arcing bolts
-- **WIZARD** - mana-fuelled caster with a four-spell book (`E`): Arcane Bolt, Frost Lance, Ember Fan and Void Orb
-- **SNIPER** - ghillie-suited marksman, one huge shot on a long reload
-- **KNIGHT** - sword-only melee. Wide swing arc, 7 HP, 3 armor plates, and enemies' bullets that cross his swing are **parried** back at them for sword damage.
+All four heroes share one hand-drawn pixel sprite: a 1px outline, three-tone robe shading, a shoulder cape, a two-frame walk cycle and class headgear the title cards reuse.
+
+- **MAGE** - balanced arcing bolts, hooded circlet, staff with a gold focus stone
+- **WIZARD** - mana-fuelled caster with a four-spell book (`E`): Arcane Bolt, Frost Lance, Ember Fan and Void Orb. Tall banded hat and a floating focus stone
+- **SNIPER** - ghillie-suited marksman, one huge shot on a long reload. Ghillie brim, strands and rifle
+- **KNIGHT** - sword-only melee. Visored helm, gold crest, pauldrons and back shield; wide swing arc, 7 HP, 3 armor plates, and enemies' bullets that cross his swing are **parried** back at them
 
 ### Relics
 
