@@ -1,0 +1,58 @@
+name: Publish to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the published build
+        run: |
+          mkdir -p site/js
+          base="https://site-497624e43cfb49f8a58564653cb22aff.freebuff.page"
+          curl -fsSL "$base/" -o site/index.html
+          curl -fsSL "$base/style.css" -o site/style.css
+          for f in core sound particles bullets dungeon player enemies upgrades bosses game; do
+            curl -fsSL "$base/js/$f.js" -o "site/js/$f.js"
+          done
+          ls -l site site/js
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Mirror the build to the gh-pages branch
+        continue-on-error: true
+        run: |
+          cd site
+          git init -q
+          git checkout -q -b gh-pages
+          git add -A
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -qm "Mirror published build"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
