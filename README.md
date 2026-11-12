@@ -7,12 +7,12 @@ A neon-arcane pixel bullet-hell roguelike that runs in a single browser tab. Fiv
 **https://hrw233.github.io/crypt-of-the-lich-warden/**
 
 - **MAGE** - balanced arcing bolts
-- **WIZARD** - mana-fuelled casting; spells drain a regenerating mana pool
+- **WIZARD** - mana-fuelled caster with a four-spell book (`E`): Arcane Bolt, Frost Lance, Ember Fan and Void Orb
 - **SNIPER** - ghillie-suited marksman, one huge shot on a long reload
 
 You carry at most **four relics** per run; a fifth choice replaces the oldest. Each class draws from its own pool of class-specific relic cards.
 
-Controls: `WASD` move, mouse aim, hold left mouse to fire, `SPACE` or right mouse to dash, `1`-`3` or arrows to pick a hero, `L` relic vault, `M` mute, `F` fps, `G` effects.
+Controls: `WASD` move, mouse aim, hold left mouse to fire, `SPACE` or right mouse to dash, `1`-`3` or arrows to pick a hero, `E` spell book (wizard), `L` relic vault, `ESC` pause menu (resume, restart, main menu), `M` mute, `F` fps, `G` effects.
 
 ## Deployment
 
