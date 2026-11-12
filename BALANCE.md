@@ -46,14 +46,34 @@ everyone else kites at 100-150 px.
 
 No hero died in any trial (3 trials at floor 1, 2 at floors 3 and 5).
 
-## Reading the table
+## Boss survival
 
-- The **knight** and **sniper** are the strongest single-target heroes; the sniper's floor-5 number
-  swings between 5.6 s and 11.6 s because crits and ammo types dominate a short wave.
-- The **cryomancer** sits mid-pack and takes almost no damage, which is the point of the chill: she
-  buys safety rather than speed.
-- The **pyromancer** is the slowest in this test by a wide margin. The bot only holds the stream on
-  target between dodges, and her damage is a burn that needs contact time to stack, so a bot that
-  kites away loses most of it. Treat her row as a floor, not a fair reading.
-- Wave sizes here are smaller than a real pack, so AoE heroes (cryomancer, pyromancer) scale better
-  in actual rooms than these numbers suggest.
+Same bot, dropped into a boss room on the matching floor with starting weapons only, no relics,
+60-second cap. Two trials per cell; the number is **seconds survived**, with deaths in brackets,
+and the second figure is the boss's remaining HP when the fight ended.
+
+| Hero | F1 LICH WARDEN | F2 BONE TITAN | F3 CRIMSON CHOIR | F4 OBSIDIAN SERAPH | F5 DEVOURER |
+|---|---|---|---|---|---|
+| CRYOMANCER | 60 (0) | 60 (0) | 60 (0) | 60 (0) | 60 (0) |
+| KNIGHT | 60 (0) | 39.5 (1) | 60 (0) | 22.5 (2) | 44.7 (2) |
+| SNIPER | 60 (0) | 60 (0) | 60 (0) | 39.0 (2) | 45.7 (2) |
+| PYROMANCER | 60 (0) | 41.9 (1) | 42.0 (1) | 22.5 (2) | 6.9 (2) |
+| MAGE | 60 (0) | 26.2 (2) | 29.0 (2) | 19.9 (2) | 16.4 (2) |
+| WIZARD | 60 (0) | 23.2 (2) | 32.4 (2) | 19.0 (2) | 12.4 (2) |
+
+Bosses actually killed inside the window:
+
+| Hero | F1 | F2 | F3 | F4 | F5 |
+|---|---|---|---|---|---|
+| KNIGHT | 13.0 / 17.3 s | 19.1 s (1 of 2) | 18.6 / 25.6 s | - | - |
+| SNIPER | 17.5 / 19.9 s | 25.9 / 31.3 s | 37.9 / 44.4 s | - | - |
+| PYROMANCER | 19.8 / 33.7 s | 33.1 s (1 of 2) | - | - | - |
+| MAGE | 22.5 / 29.5 s | - | - | - | - |
+| WIZARD | 22.3 / 22.4 s | - | - | - | - |
+| CRYOMANCER | 46.4 / 48.9 s | - | - | - | - |
+
+The Cryomancer never died in any boss trial and finished the Devourer at 1% HP twice; her chill
+suppresses the bullet patterns that kill everyone else. The Devourer is nobody's easy fight: the
+sniper and knight last longest but still lose to it, and the pyromancer dies in 6.9 s both times.
+
+## Reading the table
