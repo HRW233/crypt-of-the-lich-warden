@@ -1,6 +1,6 @@
 # Crypt of the Lich Warden
 
-A neon-arcane pixel bullet-hell roguelike that runs in a single browser tab. Five floors, five bosses, 159 relics and four playable classes. Current build: **v1.6** (shown in the bottom-right of the title screen).
+A neon-arcane pixel bullet-hell roguelike that runs in a single browser tab. Five floors, five bosses, 159 relics and four playable classes. Current build: **v1.7** (shown in the bottom-right of the title screen).
 
 ## Play
 
@@ -19,6 +19,17 @@ You carry at most **four relic slots**. Each draft offers **3 rerolls** and can 
 
 Once all four slots are full, picking a card opens a **SWAP / UPGRADE** screen (`U` or `Tab` toggles the mode): swap the card into a slot, or spend the pick to raise a held relic to its next tier. Upgrades stack on top of the lower tiers, so `MIGHT I` + `MIGHT II` in one slot gives both bonuses.
 
+### Treasure rooms
+
+Treasure rooms come in four kinds, each with its own palette, props and reward:
+
+- **RELIQUARY** - relic draft
+- **GOLD VAULT** - score cache (+1200 x floor)
+- **ARMORY** - a permanent armor plate for the run
+- **SHRINE** - heals 3 HP and refills armor
+
+Floors 3 and deeper hold a second treasure room, always of a different kind from the first.
+
 ### Armor
 
 Every hero has armor plates (mage and wizard none, sniper one, knight three). Plates soak incoming damage point for point before hearts are touched, regenerate one at a time, refill by one on entering a room, and fully refill when you descend. Relics can add plates or speed up the reforge.
@@ -29,7 +40,7 @@ Pick **EASY**, **MEDIUM** or **HARD** on the title screen (`F1`-`F3` or click). 
 
 ### Rooms
 
-Floors hold 8, 9, 10, 11 and 12 rooms respectively; floors 3 and deeper hide a second reliquary with an extra relic draft.
+Floors hold 8, 9, 10, 11 and 12 rooms respectively.
 
 Controls: `WASD` move, mouse aim, hold left mouse to fire, `SPACE` or right mouse to dash, `1`-`4` or arrows to pick a hero, `F1`-`F3` difficulty, `E` spell book (wizard), `L` relic vault, `ESC` pause menu (resume, restart, main menu), `M` mute, `F` fps, `G` effects.
 
