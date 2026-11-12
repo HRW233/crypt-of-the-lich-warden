@@ -1,6 +1,6 @@
 # Crypt of the Lich Warden
 
-A neon-arcane pixel bullet-hell roguelike that runs in a single browser tab. Five floors, five bosses, 159 relics and four playable classes.
+A neon-arcane pixel bullet-hell roguelike that runs in a single browser tab. Five floors, five bosses, 159 relics and four playable classes. Current build: **v1.6** (shown in the bottom-right of the title screen).
 
 ## Play
 
@@ -11,9 +11,13 @@ A neon-arcane pixel bullet-hell roguelike that runs in a single browser tab. Fiv
 - **MAGE** - balanced arcing bolts
 - **WIZARD** - mana-fuelled caster with a four-spell book (`E`): Arcane Bolt, Frost Lance, Ember Fan and Void Orb
 - **SNIPER** - ghillie-suited marksman, one huge shot on a long reload
-- **KNIGHT** - sword-only melee, wide swing arc, 7 HP and 3 armor plates
+- **KNIGHT** - sword-only melee. Wide swing arc, 7 HP, 3 armor plates, and enemies' bullets that cross his swing are **parried** back at them for sword damage.
 
-You carry at most **four relics** per run; a fifth choice replaces whichever slot you pick. Each class draws from its own pool of class-specific relic cards. The relic draft offers **3 rerolls per run** and can be **skipped**.
+### Relics
+
+You carry at most **four relic slots**. Each draft offers **3 rerolls** and can be **skipped**, and each class draws from its own pool of class-specific cards.
+
+Once all four slots are full, picking a card opens a **SWAP / UPGRADE** screen (`U` or `Tab` toggles the mode): swap the card into a slot, or spend the pick to raise a held relic to its next tier. Upgrades stack on top of the lower tiers, so `MIGHT I` + `MIGHT II` in one slot gives both bonuses.
 
 ### Armor
 
