@@ -6,10 +6,10 @@ No relics, MEDIUM difficulty, starting weapons only.
 
 The bot is the same for every hero: it aims at the nearest enemy, holds the trigger, kites to a
 hero-specific range, and slides away from any hostile bullet within 36 px. Close-range heroes
-(the knight and the pyromancer, whose embers die within ~60 px) are held at 26 px and 45 px;
-everyone else kites at 100-150 px.
+(the knight and the pyromancer) are held at 26 px and 45-55 px; everyone else kites at 100-150 px.
 
-`v4.1` / `v4.2`, measured 2026-11-12. Relic-set numbers measured on `v4.4`.
+Measured 2026-11-12: bare numbers on `v4.1` / `v4.2`, relic set and bosses on `v4.4`, the pass
+itself on `v4.5`.
 
 ## Clear time (seconds, lower is better)
 
@@ -49,8 +49,7 @@ No hero died in any trial (3 trials at floor 1, 2 at floors 3 and 5).
 ## Boss survival
 
 Same bot, dropped into a boss room on the matching floor with starting weapons only, no relics,
-60-second cap. Two trials per cell; the number is **seconds survived**, with deaths in brackets,
-and the second figure is the boss's remaining HP when the fight ended.
+60-second cap. Two trials per cell; the number is **seconds survived**, with deaths in brackets.
 
 | Hero | F1 LICH WARDEN | F2 BONE TITAN | F3 CRIMSON CHOIR | F4 OBSIDIAN SERAPH | F5 DEVOURER |
 |---|---|---|---|---|---|
@@ -72,9 +71,9 @@ Bosses actually killed inside the window:
 | WIZARD | 22.3 / 22.4 s | - | - | - | - |
 | CRYOMANCER | 46.4 / 48.9 s | - | - | - | - |
 
-The Cryomancer never died in any boss trial and finished the Devourer at 1% HP twice; her chill
-suppresses the bullet patterns that kill everyone else. The Devourer is nobody's easy fight: the
-sniper and knight last longest but still lose to it, and the pyromancer dies in 6.9 s both times.
+The Cryomancer never died in any boss trial; her chill suppresses the bullet patterns that kill
+everyone else. The Devourer is nobody's easy fight: the sniper and knight last longest but still
+lose to it, and the pyromancer died in 6.9 s both times before the v4.5 pass.
 
 ## With a full relic set
 
@@ -122,14 +121,41 @@ Choir, where the mage and wizard used to die to both. The **Obsidian Seraph** st
 mage, wizard and pyromancer even fully geared, and the **Devourer** is still a coin flip or worse
 for everyone except the sniper, whose burst is the only thing that races its finale.
 
+## Balance pass v4.5
+
+Bot data showed the pyromancer was last on every axis and the wizard died fastest, so:
+
+- **Pyromancer**: max HP 6 → 7, damage 5 → 6, ember damage factor 0.25 → 0.30, ember lifetime
+  0.20-0.30 s → 0.32-0.44 s (reach ~75 px → ~110 px). Burn rules untouched: ticks still deal
+  exactly 1 damage, stacks still only raise the tick rate.
+- **Wizard**: max HP 4 → 5.
+- **Cryomancer**: storm tick 0.18 s → 0.16 s and radius 60 px → 66 px, lifting her clear speed
+  without touching her chill strength.
+
+Bare clear times after the pass (seconds, two trials):
+
+| Hero | Floor 1 | Floor 3 | Floor 5 | F5 before |
+|---|---|---|---|---|
+| SNIPER | 6.0 | 11.3 | 12.2 | 8.6 |
+| KNIGHT | 8.3 | 8.1 | 11.7 | 12.5 |
+| PYROMANCER | 8.5 | 11.9 | **13.8** | 28.0 |
+| WIZARD | 7.7 | 11.8 | 16.2 | 15.8 |
+| MAGE | 8.2 | 13.6 | 17.1 | 17.0 |
+| CRYOMANCER | 7.9 | 13.5 | 18.2 | 19.0 |
+
+The pyromancer went from 28 s to under 14 s on a floor-5 wave - no longer the worst by a mile.
+Against the Devourer her survival went from 6.9 s twice to 34.4 s (death) and 60 s (alive, boss at
+30%), and she now kills the Obsidian Seraph in one of two trials.
+
 ## Reading the table
 
 - The **knight** and **sniper** are the strongest single-target heroes; the sniper's floor-5 number
   swings between 5.6 s and 11.6 s because crits and ammo types dominate a short wave.
 - The **cryomancer** sits mid-pack and takes almost no damage, which is the point of the chill: she
   buys safety rather than speed.
-- The **pyromancer** is the slowest in this test by a wide margin. The bot only holds the stream on
-  target between dodges, and her damage is a burn that needs contact time to stack, so a bot that
-  kites away loses most of it. Treat her row as a floor, not a fair reading.
+- The **pyromancer** was the slowest in the first pass by a wide margin: the bot only holds the
+  stream on target between dodges, and her damage is a burn that needs contact time to stack. The
+  v4.5 ember buffs closed most of that gap, but treat her row as a floor, not a fair reading.
 - Wave sizes here are smaller than a real pack, so AoE heroes (cryomancer, pyromancer) scale better
   in actual rooms than these numbers suggest.
+- Two trials per cell, and boss attack order is random, so individual cells swing by 30% or more.
