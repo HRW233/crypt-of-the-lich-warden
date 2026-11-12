@@ -33,8 +33,6 @@ BOT.fightBoss(4, 60);           // boss of floor 4, 60 s cap, returns secs / die
   arena walls.
 - **Dash**: uses the space bar when a bullet will land within 0.16 s (i-frames beat walking), or
   when even the best candidate direction is still dangerous.
-- **Nuke quick-time**: presses the key the Devourer's finale flashes up, so the fight is measured
-  as a fight rather than ending in an automatic blast.
 - **Preferred range**: knight 26 px, pyromancer 55 px, mage/cryomancer 100 px, wizard 105 px,
   sniper 150 px.
 
@@ -60,9 +58,6 @@ cryomancer 0.
 Clear times barely moved, which is the intended result: the bot is a measuring instrument, and its
 damage output should not change just because it dodges better.
 
-The F5 column predates `v4.7`, where the nuke became a key-dodge quick-time instead of a damage
-race, so those Devourer numbers need re-measuring before they are quoted again.
-
 ## Known weaknesses
 
 - **The Obsidian Seraph got worse, not better** (18 -> 22 deaths). Its fights mix diving with beam
@@ -71,6 +66,6 @@ race, so those Devourer numbers need re-measuring before they are quoted again.
   next time.
 - Wall and gap patterns (the Choir's bullet walls) are only partly solved: two step lengths help,
   but the bot cannot plan a route through a gap it has not reached yet.
-- The bot answers quick-time prompts perfectly, so it cannot measure how hard the nuke is for a
-  human hand.
-- The bot never uses relics, abilities or ammo types, so it measures starting kits and raw scaling.
+- The bot never uses relics, abilities or the spell book, so it measures starting kits and raw
+  scaling. That is why it always loses the Devourer's damage-race nuke: a bare starting kit cannot
+  put out enough damage in 12 s to fill the break bar.
