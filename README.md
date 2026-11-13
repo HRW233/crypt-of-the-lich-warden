@@ -27,7 +27,7 @@ On a phone or tablet the game swaps the keyboard for an on-screen pad: a d-pad b
 
 Five floors, each a set of generated rooms ending in a boss. Clearing a room opens the doors; treasure rooms offer a relic draft, a score cache, an armor plate or a heal. Death ends the run.
 
-**Difficulty** is picked on the title screen: EASY (-20% enemy health and bullet speed, one fewer enemy, no relic or record unlocks), MEDIUM, HARD (+30% health, faster bullets, one extra enemy).
+**Difficulty** is picked on the title screen: EASY (-20% enemy health, slower bullets, one fewer enemy per room, and no relic or record unlocks), MEDIUM, HARD (+30% health, faster bullets, one extra enemy).
 
 **Armor** plates soak damage point for point before hearts, regenerate one at a time, and refill when you descend. Mage and wizard have none, sniper one, knight three.
 
@@ -36,7 +36,7 @@ Five floors, each a set of generated rooms ending in a boss. Clearing a room ope
 - **MAGE** - balanced arcing bolts.
 - **WIZARD** - mana caster with a four-spell book: Arcane Bolt, Frost Lance, Ember Fan, Void Orb.
 - **SNIPER** - one huge shot on a long reload, with cycling ammo types.
-- **KNIGHT** - sword only, heavy armor, and bullets that cross the swing are parried.
+- **KNIGHT** - sword only, heavy armor, and bullets that cross the swing are parried back at the closest enemy.
 - **PYROMANCER** - flamethrower with stacking burn ticks.
 - **CRYOMANCER** - snowstorm and spell book; unlocks only after you win a run once.
 
