@@ -151,6 +151,10 @@ const NET = {
   sock: null,
   sockLive: false,
   sockJoined: '',
+  // talking to the site's own relay instead of one on the LAN: slower, and
+  // every message is a request, so the rates come down
+  hosted: false,
+  hostedChecked: false,
 
   /* ------------------------------ host ----------------------------- */
 
@@ -168,8 +172,16 @@ const NET = {
         return r.json();
       })
       .then((d) => {
-        const ip = (d.ips && d.ips[0]) || window.location.hostname;
-        this.address = 'http://' + ip + ':' + (d.port || window.location.port) + '/';
+        if (d && d.hosted) {
+          // the published site is the relay: nothing to install, and the
+          // address P2 needs is the one they are already on
+          this.hosted = true;
+          this.base = '';
+          this.address = window.location.host;
+        } else {
+          const ip = (d.ips && d.ips[0]) || window.location.hostname;
+          this.address = 'http://' + ip + ':' + (d.port || window.location.port) + '/';
+        }
         this.hostWait = false;
         this.beginHost(game);
       })
@@ -214,7 +226,7 @@ const NET = {
         this.lastAnnounce = performance.now();
         this.announce(this.gameRef);
       }
-    }, NET_HB_MS);
+    }, this.hosted ? NET_HB_MS * 3 : NET_HB_MS);
     game.beginLanHost();
     this.sockConnect(game, this.base);
   },
@@ -332,6 +344,18 @@ const NET = {
     } catch (err) {
       this.regLost = true;
     }
+    // the guest has to know it is on the site's relay before it joins, or it
+    // would keep the LAN snapshot and input rates up
+    if (!this.hostedChecked) {
+      try {
+        const h = await fetch('/lan/hello', { cache: 'no-store' });
+        if (h.ok) {
+          const hello = await h.json();
+          this.hosted = !!hello.hosted;
+          this.hostedChecked = true;
+        }
+      } catch (err) { /* no relay on this origin at all */ }
+    }
     try {
       const r = await fetch('/lan/info', { cache: 'no-store' });
       if (r.ok) {
@@ -422,6 +446,10 @@ const NET = {
   joinOpen(game, code, base) {
     this.role = 'guest';
     this.base = base || '';
+    // an https page can only ever be talking to the hosted relay
+    if (location.protocol === 'https:' && (!base || base.indexOf(location.origin) === 0)) {
+      this.hosted = true;
+    }
     this.code = code;
     this.peer = 'guest-' + Math.floor(Math.random() * 1000);
     this.since = 0;
@@ -435,7 +463,7 @@ const NET = {
     this.hbTimer = setInterval(() => {
       if (this.role !== 'guest') return;
       this.post({ t: 'in', d: this.lastOut || this.input });
-    }, 800);
+    }, this.hosted ? 2500 : 800);
     this.loop(game);
     this.sockConnect(game, base);
   },
@@ -519,7 +547,7 @@ const NET = {
     this.snapAge += dt;
     this.inputT += dt;
     this.follow(game, dt);
-    if (this.inputT >= 1 / NET_INPUT_HZ) {
+    if (this.inputT >= (this.hosted ? 0.1 : 1 / NET_INPUT_HZ)) {
       this.inputT = 0;
       this.sendInput(game);
     }
@@ -596,7 +624,7 @@ const NET = {
     // connection can never wedge the session the way a boolean lock would
     if (msg.t === 'snap') {
       const now = performance.now();
-      if (now - (this.lastSnapPost || 0) < 45) return;
+      if (now - (this.lastSnapPost || 0) < (this.hosted ? 120 : 45)) return;
       this.lastSnapPost = now;
     }
     if (this.sock && this.sock.connected) {
@@ -623,6 +651,9 @@ const NET = {
         this.lost = false;
         const msgs = data.msgs || [];
         for (let i = 0; i < msgs.length; i++) this.handle(game, msgs[i]);
+        // the hosted relay answers at once instead of holding the request
+        // open, so the client paces its own polling
+        if (this.hosted && !msgs.length) await netSleep(90);
       } catch (err) {
         this.lost = true;
         /* A listed room advertises the LAN address the host announced, and
