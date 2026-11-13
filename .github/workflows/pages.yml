@@ -59,6 +59,31 @@ jobs:
               commit -qm "Sync the published source"
           git push
 
+      # The relay and the balance bot are not part of the site, so nothing
+      # above can regenerate them: they only exist in the repo. A clone is
+      # only worth having if `node server/lan.js` works in it, so say so
+      # loudly here rather than discovering it when two people try to play.
+      - name: Check a clone can host co-op
+        run: |
+          missing=0
+          for f in index.html style.css server/lan.js tools/testbot.js; do
+            if [ ! -s "/tmp/repo/$f" ]; then
+              echo "::error::/tmp/repo/$f is missing, a clone could not host co-op"
+              missing=1
+            fi
+          done
+          scripts=$(ls "$GITHUB_WORKSPACE"/site/js/*.js 2>/dev/null | wc -l)
+          if [ "$scripts" -ne 11 ]; then
+            echo "::error::expected 11 scripts in site/js, found $scripts"
+            missing=1
+          fi
+          if ! node --check /tmp/repo/server/lan.js; then
+            echo "::error::server/lan.js does not parse"
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then exit 1; fi
+          echo "clone is complete: game, relay and balance bot"
+
       - name: Mirror the build to the gh-pages branch
         continue-on-error: true
         run: |
