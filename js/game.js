@@ -519,7 +519,7 @@ function inRect(px, py, r) {
 }
 
 const FINAL_FLOOR = 5;
-const BUILD_TAG = 'v4.29';
+const BUILD_TAG = 'v4.30';
 const RECORD_KEY = 'lichwarden.records.v1';
 
 const RECORD_DEFAULTS = {

@@ -11,11 +11,15 @@
 
 const NET_SNAP_HZ = 20;
 const NET_INPUT_HZ = 30;
+/* how often a hosted run re-announces itself to the public list, and how often
+   it heartbeats the relay even with nobody watching. Timers, not the game
+   loop: see beginHost. */
+const NET_ANNOUNCE_MS = 4000;
+const NET_HB_MS = 1500;
 
 /* The public site keeps the list of open runs; the relay itself still runs on
    whoever is hosting. Everything in the list is joined through that address. */
 const NET_REGISTRY = 'https://site-497624e43cfb49f8a58564653cb22aff.freebuff.page';
-const NET_REGISTRY_HZ = 15;
 
 /* The public list is a convenience, not the only door. A partner on the same
    wi-fi is one typed address away, and the last one is remembered. */
@@ -132,7 +136,6 @@ const NET = {
   hbTimer: null,
   lastOut: null,
   address: '',
-  regT: 0,
   rooms: [],
   sel: 0,
   regLost: false,
@@ -142,6 +145,8 @@ const NET = {
   // hosting is on screen from the click, not from whenever the relay answers
   hostWait: false,
   hostError: '',
+  gameRef: null,
+  lastAnnounce: 0,
 
   /* ------------------------------ host ----------------------------- */
 
@@ -189,8 +194,24 @@ const NET = {
     this.remote = new RemoteInput();
     this.loop(game);
     this.post({ t: 'hb' });
-    game.beginLanHost();
     this.announce(game);
+    /* The room has to stay on the join list while it is open, including while
+       P1 alt-tabs away to send P2 the address. rAF stops in a background tab,
+       so the keep-alive cannot live in the game loop the way snapshots do:
+       a timer heartbeats the relay (which is what lists the room for other
+       players on this machine) and re-announces it to the public list. */
+    this.gameRef = game;
+    this.lastAnnounce = performance.now();
+    if (this.hbTimer) clearInterval(this.hbTimer);
+    this.hbTimer = setInterval(() => {
+      if (this.role !== 'host' || !this.code) return;
+      this.post({ t: 'hb' });
+      if (performance.now() - this.lastAnnounce >= NET_ANNOUNCE_MS && this.gameRef) {
+        this.lastAnnounce = performance.now();
+        this.announce(this.gameRef);
+      }
+    }, NET_HB_MS);
+    game.beginLanHost();
   },
 
   hostUpdate(game, dt) {
@@ -200,22 +221,11 @@ const NET = {
       game.onGuestLeave();
     }
     // keep this run on the public list while it is open
-    this.regT += dt;
-    if (this.regT >= NET_REGISTRY_HZ) {
-      this.regT = 0;
-      this.announce(game);
-    }
     this.snapT += dt;
-    this.hbT += dt;
     const step = 1 / NET_SNAP_HZ;
     if (this.snapT >= step) {
       this.snapT = 0;
-      if (this.guestHere) {
-        this.sendSnapshot(game);
-      } else if (this.hbT >= 1) {
-        this.hbT = 0;
-        this.post({ t: 'hb' });
-      }
+      if (this.guestHere) this.sendSnapshot(game);
     }
   },
 
@@ -540,6 +550,23 @@ const NET = {
         for (let i = 0; i < msgs.length; i++) this.handle(game, msgs[i]);
       } catch (err) {
         this.lost = true;
+        /* A listed room advertises the LAN address the host announced, and
+           that address is not always reachable from this browser even when
+           the page itself is being served by that same relay. Fall back to
+           the origin the page was opened on, and say hello again: the first
+           one went to the address that did not answer. */
+        if (this.base && this.role === 'guest') {
+          try {
+            const own = await fetch('/lan/poll?room=' + encodeURIComponent(this.code) +
+              '&peer=' + encodeURIComponent(this.peer) + '&since=' + this.since, { cache: 'no-store' });
+            if (own.ok) {
+              this.base = '';
+              this.lost = false;
+              this.post({ t: 'hello', d: { char: CHAR_LIST[game.charIndex].id, charIndex: game.charIndex } });
+              continue;
+            }
+          } catch (ownErr) { /* not this origin either: keep trying the address */ }
+        }
         await netSleep(500);
       }
     }
@@ -555,6 +582,8 @@ const NET = {
     this.view = null;
     this.guestHere = false;
     this.rooms = [];
+    this.gameRef = null;
+    this.lastAnnounce = 0;
     if (this.hbTimer) clearInterval(this.hbTimer);
     this.hbTimer = null;
   },
