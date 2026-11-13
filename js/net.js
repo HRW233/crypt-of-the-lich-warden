@@ -155,6 +155,9 @@ const NET = {
   // every message is a request, so the rates come down
   hosted: false,
   hostedChecked: false,
+  // the origin carrying the traffic when this page has no relay of its own:
+  // a static mirror of the game still hosts through the published site
+  relay: '',
 
   /* ------------------------------ host ----------------------------- */
 
@@ -166,18 +169,27 @@ const NET = {
     // screen holds a panel with the address from the moment HOST is clicked.
     this.hostWait = true;
     this.hostError = '';
-    fetch('/lan/hello', { cache: 'no-store' })
-      .then((r) => {
+    this.relay = '';
+    const probe = (origin) =>
+      fetch(origin + '/lan/hello', { cache: 'no-store' }).then((r) => {
         if (!r.ok) throw new Error('no relay');
         return r.json();
+      });
+    probe('')
+      .catch(() => {
+        // no relay here (a static mirror, say): the published site has one
+        this.relay = NET_REGISTRY;
+        return probe(NET_REGISTRY);
       })
       .then((d) => {
         if (d && d.hosted) {
-          // the published site is the relay: nothing to install, and the
-          // address P2 needs is the one they are already on
+          // a relay with no server to run: nothing to install, and the
+          // address P2 needs is the one the room is listed on
           this.hosted = true;
-          this.base = '';
-          this.address = window.location.host;
+          this.base = this.relay;
+          this.address = this.base
+            ? this.base.replace(/^https?:\/\//i, '')
+            : window.location.host;
         } else {
           const ip = (d.ips && d.ips[0]) || window.location.hostname;
           this.address = 'http://' + ip + ':' + (d.port || window.location.port) + '/';
@@ -191,7 +203,7 @@ const NET = {
         game.state = 'title';
         // the panel stays up, now spelling out what is missing: the address
         // it already shows becomes right the moment the relay is started
-        this.hostError = 'NO CO-OP SERVER - npm run lance OR node server/lan.js';
+        this.hostError = 'NO CO-OP RELAY REACHABLE - TRY THE PUBLISHED SITE';
       });
   },
 
@@ -347,24 +359,42 @@ const NET = {
     // the guest has to know it is on the site's relay before it joins, or it
     // would keep the LAN snapshot and input rates up
     if (!this.hostedChecked) {
+      const probe = (origin) =>
+        fetch(origin + '/lan/hello', { cache: 'no-store' }).then((r) => {
+          if (!r.ok) throw new Error('no relay');
+          return r.json();
+        });
       try {
-        const h = await fetch('/lan/hello', { cache: 'no-store' });
-        if (h.ok) {
-          const hello = await h.json();
+        const hello = await probe('');
+        this.hosted = !!hello.hosted;
+        this.hostedChecked = true;
+      } catch (err) {
+        try {
+          const hello = await probe(NET_REGISTRY);
           this.hosted = !!hello.hosted;
           this.hostedChecked = true;
-        }
-      } catch (err) { /* no relay on this origin at all */ }
+          this.relay = NET_REGISTRY;
+        } catch (err2) { /* no relay anywhere: the public list is all there is */ }
+      }
     }
     try {
-      const r = await fetch('/lan/info', { cache: 'no-store' });
+      const r = await fetch((this.relay || '') + '/lan/info', { cache: 'no-store' });
       if (r.ok) {
         const d = await r.json();
         for (const code of (d && d.open) || []) {
           const listed = rooms.filter((x) => x.code === code)[0];
-          // a run this very server is hosting is joined on this origin, not
-          // through whatever address it announced to the public list
-          if (listed) {
+          if (this.relay) {
+            // joined at the relay that listed it, not at whatever address its
+            // host announced to the public list
+            if (listed) {
+              listed.local = 0;
+              listed.addr = this.relay;
+            } else {
+              rooms.unshift({ code, addr: this.relay, name: '', host: '', floor: 1, room: '', players: 1, age: 0 });
+            }
+          } else if (listed) {
+            // a run this very server is hosting is joined on this origin, not
+            // through whatever address it announced to the public list
             listed.local = 1;
             listed.addr = '';
           } else {
@@ -446,8 +476,11 @@ const NET = {
   joinOpen(game, code, base) {
     this.role = 'guest';
     this.base = base || '';
-    // an https page can only ever be talking to the hosted relay
-    if (location.protocol === 'https:' && (!base || base.indexOf(location.origin) === 0)) {
+    // an https page can only ever be talking to a hosted relay, and a relay
+    // on another origin is one as well
+    if (this.relay && this.base === this.relay) {
+      this.hosted = true;
+    } else if (location.protocol === 'https:' && (!base || base.indexOf(location.origin) === 0)) {
       this.hosted = true;
     }
     this.code = code;
@@ -474,6 +507,8 @@ const NET = {
      loaded with its client. Nothing depends on it: if the socket never
      connects, post() and loop() keep using the HTTP relay underneath. */
   sockConnect(game, base) {
+    // the hosted relay is not a socket server
+    if (this.hosted) return;
     if (typeof window === 'undefined' || !window.io) return;
     if (this.sock) {
       this.sockJoin();
