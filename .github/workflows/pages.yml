@@ -12,7 +12,9 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  # never cancel a deploy mid-flight: that orphans the Pages deployment and
+  # every later run is rejected with "due to in progress deployment"
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -22,10 +24,10 @@ jobs:
         run: |
           mkdir -p site/js
           base="https://site-497624e43cfb49f8a58564653cb22aff.freebuff.page"
-          curl -fsSL "$base/" -o site/index.html
-          curl -fsSL "$base/style.css" -o site/style.css
+          curl -fsSL --max-time 60 "$base/" -o site/index.html
+          curl -fsSL --max-time 60 "$base/style.css" -o site/style.css
           for f in core sound particles bullets dungeon player enemies upgrades bosses net game; do
-            curl -fsSL "$base/js/$f.js" -o "site/js/$f.js"
+            curl -fsSL --max-time 60 "$base/js/$f.js" -o "site/js/$f.js"
           done
           ls -l site site/js
 
