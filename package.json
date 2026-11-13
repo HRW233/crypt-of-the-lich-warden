@@ -1,0 +1,15 @@
+{
+  "name": "crypt-of-the-lich-warden",
+  "version": "4.31.0",
+  "private": true,
+  "description": "Neon-arcane pixel bullet-hell roguelike with LAN co-op",
+  "scripts": {
+    "start": "node server/lan.js",
+    "lance": "node server/lance.mjs"
+  },
+  "dependencies": {
+    "lance-gg": "^5.0.2",
+    "socket.io": "^4.7.5",
+    "socket.io-client": "^4.7.5"
+  }
+}
