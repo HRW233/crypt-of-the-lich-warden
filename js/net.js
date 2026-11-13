@@ -179,7 +179,7 @@ const NET = {
         game.state = 'title';
         // the panel stays up, now spelling out what is missing: the address
         // it already shows becomes right the moment the relay is started
-        this.hostError = 'RELAY NOT RUNNING - RUN node server/lan.js';
+        this.hostError = 'NO CO-OP SERVER - npm run lance OR node server/lan.js';
       });
   },
 
