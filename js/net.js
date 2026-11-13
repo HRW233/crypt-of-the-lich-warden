@@ -147,6 +147,10 @@ const NET = {
   hostError: '',
   gameRef: null,
   lastAnnounce: 0,
+  // Lance's socket.io server, when the page was loaded with its client
+  sock: null,
+  sockLive: false,
+  sockJoined: '',
 
   /* ------------------------------ host ----------------------------- */
 
@@ -212,6 +216,7 @@ const NET = {
       }
     }, NET_HB_MS);
     game.beginLanHost();
+    this.sockConnect(game, this.base);
   },
 
   hostUpdate(game, dt) {
@@ -432,6 +437,65 @@ const NET = {
       this.post({ t: 'in', d: this.lastOut || this.input });
     }, 800);
     this.loop(game);
+    this.sockConnect(game, base);
+  },
+
+  /* --------------------------- lance socket ------------------------ */
+
+  /* The co-op traffic rides Lance's socket.io server when this page was
+     loaded with its client. Nothing depends on it: if the socket never
+     connects, post() and loop() keep using the HTTP relay underneath. */
+  sockConnect(game, base) {
+    if (typeof window === 'undefined' || !window.io) return;
+    if (this.sock) {
+      this.sockJoin();
+      return;
+    }
+    let sock;
+    try {
+      sock = window.io(base || undefined, { reconnection: true, timeout: 5000 });
+    } catch (err) {
+      return;
+    }
+    this.sock = sock;
+    sock.on('connect', () => {
+      this.sockLive = true;
+      this.sockJoin();
+      // the handshake message went out over HTTP before this socket existed,
+      // and the host now listens on the socket, so say hello again
+      if (this.role === 'guest' && this.code) {
+        this.post({ t: 'hello', d: { char: CHAR_LIST[game.charIndex].id, charIndex: game.charIndex } });
+      }
+    });
+    sock.on('disconnect', () => { this.sockLive = false; });
+    sock.on('connect_error', () => { this.sockLive = false; });
+    sock.on('crypt:msg', (p) => {
+      if (!p || !p.msg) return;
+      // the relay sequence number rides along, so a later fall back to
+      // long-polling never replays messages this client already applied
+      if (typeof p.n === 'number' && p.n > this.since) this.since = p.n;
+      this.lost = false;
+      this.snapAge = Math.min(this.snapAge, 1);
+      this.handle(game, p.msg);
+    });
+  },
+
+  sockJoin() {
+    if (!this.sock || !this.sock.connected || !this.code) return;
+    const tag = this.code + ':' + this.peer;
+    if (this.sockJoined === tag) return;
+    this.sockJoined = tag;
+    this.sock.emit('crypt:join', { room: this.code, peer: this.peer, host: this.role === 'host' });
+  },
+
+  /* Give up the socket: used when a session ends, so a stale connection to
+     one relay never follows the player to the next run. */
+  sockClose() {
+    this.sockJoined = '';
+    if (!this.sock) return;
+    try { this.sock.disconnect(); } catch (err) { /* already gone */ }
+    this.sock = null;
+    this.sockLive = false;
   },
 
   guestUpdate(game, dt) {
@@ -535,11 +599,22 @@ const NET = {
       if (now - (this.lastSnapPost || 0) < 45) return;
       this.lastSnapPost = now;
     }
+    if (this.sock && this.sock.connected) {
+      if (this.sockJoined !== this.code + ':' + this.peer) this.sockJoin();
+      this.sock.emit('crypt:msg', { room: this.code, peer: this.peer, msg });
+      return;
+    }
     fetch(this.url('post'), { method: 'POST', body: JSON.stringify(msg), cache: 'no-store' }).catch(() => {});
   },
 
   async loop(game) {
     while (this.role !== 'off') {
+      // with the socket live the messages are pushed, so polling would only
+      // deliver them a second time
+      if (this.sock && this.sock.connected) {
+        await netSleep(1000);
+        continue;
+      }
       try {
         const res = await fetch(this.url('poll') + '&since=' + this.since, { cache: 'no-store' });
         if (!res.ok) throw new Error('poll');
@@ -586,6 +661,7 @@ const NET = {
     this.lastAnnounce = 0;
     if (this.hbTimer) clearInterval(this.hbTimer);
     this.hbTimer = null;
+    this.sockClose();
   },
 
   handle(game, m) {
