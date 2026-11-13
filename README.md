@@ -2,7 +2,7 @@
 
 A neon-arcane pixel bullet-hell roguelike that runs in one browser tab. Five floors, five bosses, 176 relics, six heroes, and a two-player co-op mode over your local network.
 
-No build step, no dependencies, no image files: every sprite is drawn with the canvas API at runtime, and the eleven scripts load with plain `<script>` tags.
+No build step for the game itself: every sprite is drawn with the canvas API at runtime and the scripts load with plain `<script>` tags. The co-op server is optional and only needed when two people play.
 
 **Play:** https://hrw233.github.io/crypt-of-the-lich-warden/
 
@@ -17,7 +17,7 @@ No build step, no dependencies, no image files: every sprite is drawn with the c
 | Q | cycle ammo (sniper) or cast (cryomancer) |
 | 1 - 6 | pick a hero on the title screen |
 | L, O | relic vault, profiles |
-| H, J | host a LAN room, open the room list |
+| H, J | host a co-op room, open the room list |
 | Esc or P | pause; in co-op both players must ask to pause |
 | M, F, G | mute, FPS counter, low-FX mode |
 
@@ -46,56 +46,73 @@ A run holds at most **four** relics. Every draft offers **three rerolls** and ca
 
 171 standard relics and 5 legendaries, many gated behind lifetime stats (slain bosses, bullets grazed, runs won) tracked per profile.
 
-## Co-op over the LAN
+## Co-op over the network
 
-Two machines, one run. P1's browser simulates everything; P2 sends input and draws what P1 reports.
+Two players, one run. P1's browser simulates everything; P2 sends input and draws what P1 reports. Both players open the same URL, so one server on P1's machine serves the game and carries the traffic.
 
-**Start the relay on P1's machine**, from this folder:
+There are two servers, and the same build works with either. The client uses a WebSocket when it can and the HTTP relay when it cannot, so which one is running is not something you have to tell the game.
+
+### With Lance (recommended)
+
+[Lance](https://github.com/lance-gg/lance) (`lance-gg`) owns the socket.io server: connections, rooms, the ping/latency monitor. The game's snapshots and inputs ride its sockets.
+
+```
+npm install
+npm run lance        # same as: node server/lance.mjs
+```
+
+Lance's model is a server that runs the game logic. This game does not work that way - P1's browser is the authority - so the server-side game engine is deliberately empty and Lance provides the network, not the rules. See the comment at the top of `server/lance.mjs`.
+
+### Without dependencies
 
 ```
 node server/lan.js
 ```
 
-It prints both addresses:
+Plain node, nothing to install: the static server plus a long-poll relay. Same rooms, same join list, a little more latency than the socket.
+
+### Joining
+
+Either server prints both addresses:
 
 ```
   this machine : http://localhost:8080/
   on the LAN   : http://192.168.1.204:8080/
 ```
 
-`PORT=9000 node server/lan.js` if 8080 is taken. The server has no dependencies; it serves the game files and relays messages between the two browsers, which cannot open sockets to each other directly.
+`PORT=9000 node server/lan.js` if 8080 is taken.
 
-**Then:**
-
-1. P1 opens the address, presses **H** to host. A chip under the score shows `192.168.1.204:8080` and the room code for the whole session - click it to copy the address.
-2. P2 opens the same URL on the other machine, presses **J**, types that address in the `P1 ADDRESS` box and presses Enter. The address is remembered, so later sessions are J then Enter.
+1. P1 opens the address, presses **H** to host. A panel shows the address and room code straight away, then a chip under the score keeps them on screen for the whole session - click it to copy the address.
+2. P2 opens the same URL on the other machine, presses **J**, and picks the room from the list. Typing P1's address in the `P1 ADDRESS` box still works and is remembered, for when the list cannot reach you.
 3. Press **P** to pause: in co-op a pause is a vote, so it only takes effect when both players ask for it, and both must release it.
 
-The relay is deliberately dumb: each peer POSTs JSON and long-polls for the other's messages, keyed by a four-letter room code. Snapshots go out at 20 Hz, guest input at 30 Hz, and the guest predicts its own movement and dash so they read immediately rather than one packet late.
-
-`ROOMS` (J) also lists open runs from a public registry, but that list is a convenience: joining by address is the path that always works, including when the registry is unreachable.
+Rooms are listed while their host is still talking. The host heartbeats on a timer rather than from the render loop, so alt-tabbing to send P2 the address does not drop the room off the list, and the relay keeps a room listed for 45 seconds of silence.
 
 ## Project layout
 
 ```
-index.html          script tags and the canvas
-style.css           page frame, canvas scaling
-js/core.js          constants, math, drawing helpers, palettes
-js/player.js        heroes, movement, dash, weapons
-js/enemies.js       enemy behaviour and bullets
-js/bosses.js        the five bosses
-js/dungeon.js       room generation, floors, props
-js/bullets.js       player projectiles
-js/upgrades.js      the relic pool, tiers, unlock gates
-js/particles.js     the particle system
-js/sound.js         synthesised audio (no files)
-js/net.js           LAN transport, lobby, guest view
-js/game.js          input, state machine, HUD, every screen
-server/lan.js       static server + co-op relay for LAN play
-tools/testbot.js    balance bot (test only, never shipped)
+index.html            script tags and the canvas
+style.css             page frame, canvas scaling
+js/core.js            constants, math, drawing helpers, palettes
+js/player.js          heroes, movement, dash, weapons
+js/enemies.js         enemy behaviour and bullets
+js/bosses.js          the five bosses
+js/dungeon.js         room generation, floors, props
+js/bullets.js         player projectiles
+js/upgrades.js        the relic pool, tiers, unlock gates
+js/particles.js       the particle system
+js/sound.js           synthesised audio (no files)
+js/net.js             co-op transport, lobby, guest view
+js/game.js            input, state machine, HUD, every screen
+js/socket.io.min.js   vendored socket.io client (MIT)
+server/relay.js       static server + relay, shared by both entry points
+server/lan.js         dependency-free server
+server/lance.mjs      Lance (lance-gg) + socket.io server
+package.json          lance-gg, socket.io, socket.io-client
+tools/testbot.js      balance bot (test only, never shipped)
 ```
 
-There is no bundler: `index.html` loads the files in the order above, so `core.js` must stay first and `game.js` last.
+The game loads its scripts in the order above, so `core.js` must stay first and `game.js` last. There is no bundler.
 
 ## How the GitHub Pages copy is built
 
@@ -103,10 +120,10 @@ The game is published to Freebuff Sites; the GitHub Pages URL is a mirror of tha
 
 On every push to `main` the workflow:
 
-1. downloads `index.html`, `style.css` and all eleven `js/*.js` from the deployment;
+1. downloads `index.html`, `style.css` and every `js/*.js` the page asks for, from the deployment;
 2. writes `js/` and `style.css` back into this repository, so the code here matches what ships (it skips the commit when nothing changed, which is what stops it from re-triggering itself);
-3. mirrors the same files to the `gh-pages` branch;
-4. publishes the artifact with `actions/deploy-pages`.
+3. checks that the clone could actually host co-op - index.html, style.css, the three server files, package.json and the bot, plus a script count taken from `index.html`;
+4. mirrors the same files to the `gh-pages` branch and publishes the artifact with `actions/deploy-pages`.
 
 One caveat worth knowing: the `pages` concurrency group uses `cancel-in-progress: false` on purpose. Cancelling a deploy after Pages has registered it orphans that deployment, and every later run is then rejected with `due to in progress deployment` until the stale record is cancelled by hand.
 
@@ -118,4 +135,4 @@ One caveat worth knowing: the `pages` concurrency group uses `cancel-in-progress
 
 ## Licence
 
-No licence file yet; treat it as all rights reserved until one is added.
+No licence file yet; treat it as all rights reserved until one is added. `js/socket.io.min.js` is the socket.io client, MIT licensed.
