@@ -1,8 +1,8 @@
 # Crypt of the Lich Warden
 
-A neon-arcane pixel bullet-hell roguelike that runs in one browser tab. Five floors, five bosses, 176 relics, six heroes, and a two-player co-op mode over your local network.
+A neon-arcane pixel bullet-hell roguelike that runs in one browser tab. Five floors, five bosses, 176 relics, six heroes, and a two-player co-op mode.
 
-No build step for the game itself: every sprite is drawn with the canvas API at runtime and the scripts load with plain `<script>` tags. The co-op server is optional and only needed when two people play.
+No build step for the game itself: every sprite is drawn with the canvas API at runtime and the scripts load with plain `<script>` tags.
 
 **Play:** https://hrw233.github.io/crypt-of-the-lich-warden/
 
@@ -46,15 +46,19 @@ A run holds at most **four** relics. Every draft offers **three rerolls** and ca
 
 171 standard relics and 5 legendaries, many gated behind lifetime stats (slain bosses, bullets grazed, runs won) tracked per profile.
 
-## Co-op over the network
+## Co-op
 
-Two players, one run. P1's browser simulates everything; P2 sends input and draws what P1 reports. Both players open the same URL, so one server on P1's machine serves the game and carries the traffic.
+Two players, one run. P1's browser simulates everything; P2 sends input and draws what P1 reports. Nothing about the game changes between the three ways to connect it.
 
-There are two servers, and the same build works with either. The client uses a WebSocket when it can and the HTTP relay when it cannot, so which one is running is not something you have to tell the game.
+### Nothing to install
 
-### With Lance (recommended)
+On the published page, press **H** to host. The site's own Worker carries the traffic - messages and host presence live in D1 - so there is no server to run anywhere. P2 opens the same page, presses **J**, sees the room in the list and joins.
 
-[Lance](https://github.com/lance-gg/lance) (`lance-gg`) owns the socket.io server: connections, rooms, the ping/latency monitor. The game's snapshots and inputs ride its sockets.
+This relay is a short-poll store rather than a socket, so the client halves its snapshot and input rates while it is talking to it. Co-op is playable but looser than on a LAN, and every message is one billed request: good for a session, not the thing to use if you play for hours every night.
+
+### With Lance, on a LAN
+
+[Lance](https://github.com/lance-gg/lance) (`lance-gg`) owns a socket.io server on P1's machine: connections, rooms, the ping/latency monitor. The game's snapshots and inputs ride its sockets.
 
 ```
 npm install
@@ -63,7 +67,7 @@ npm run lance        # same as: node server/lance.mjs
 
 Lance's model is a server that runs the game logic. This game does not work that way - P1's browser is the authority - so the server-side game engine is deliberately empty and Lance provides the network, not the rules. See the comment at the top of `server/lance.mjs`.
 
-### Without dependencies
+### With no dependencies at all
 
 ```
 node server/lan.js
@@ -73,20 +77,13 @@ Plain node, nothing to install: the static server plus a long-poll relay. Same r
 
 ### Joining
 
-Either server prints both addresses:
+Whichever server is in play, the flow is the same:
 
-```
-  this machine : http://localhost:8080/
-  on the LAN   : http://192.168.1.204:8080/
-```
-
-`PORT=9000 node server/lan.js` if 8080 is taken.
-
-1. P1 opens the address, presses **H** to host. A panel shows the address and room code straight away, then a chip under the score keeps them on screen for the whole session - click it to copy the address.
-2. P2 opens the same URL on the other machine, presses **J**, and picks the room from the list. Typing P1's address in the `P1 ADDRESS` box still works and is remembered, for when the list cannot reach you.
+1. P1 presses **H**. A panel shows the address and room code straight away, then a chip under the score keeps them on screen for the whole session - click it to copy.
+2. P2 opens the same page (or P1's address, when they are hosting on the LAN), presses **J**, and picks the room from the list. Typing P1's address in the `P1 ADDRESS` box still works and is remembered, for when the list cannot reach you.
 3. Press **P** to pause: in co-op a pause is a vote, so it only takes effect when both players ask for it, and both must release it.
 
-Rooms are listed while their host is still talking. The host heartbeats on a timer rather than from the render loop, so alt-tabbing to send P2 the address does not drop the room off the list, and the relay keeps a room listed for 45 seconds of silence.
+Rooms are listed while their host is still talking. The host heartbeats on a timer rather than from the render loop, so alt-tabbing to send P2 the address does not drop the room off the list.
 
 ## Project layout
 
@@ -105,6 +102,7 @@ js/sound.js           synthesised audio (no files)
 js/net.js             co-op transport, lobby, guest view
 js/game.js            input, state machine, HUD, every screen
 js/socket.io.min.js   vendored socket.io client (MIT)
+deploy/worker.js      the site: static files, run registry, hosted relay
 server/relay.js       static server + relay, shared by both entry points
 server/lan.js         dependency-free server
 server/lance.mjs      Lance (lance-gg) + socket.io server
@@ -122,7 +120,7 @@ On every push to `main` the workflow:
 
 1. downloads `index.html`, `style.css` and every `js/*.js` the page asks for, from the deployment;
 2. writes `js/` and `style.css` back into this repository, so the code here matches what ships (it skips the commit when nothing changed, which is what stops it from re-triggering itself);
-3. checks that the clone could actually host co-op - index.html, style.css, the three server files, package.json and the bot, plus a script count taken from `index.html`;
+3. checks that the clone could actually host co-op - index.html, style.css, the server files, package.json and the bot, plus a script count taken from `index.html`;
 4. mirrors the same files to the `gh-pages` branch and publishes the artifact with `actions/deploy-pages`.
 
 One caveat worth knowing: the `pages` concurrency group uses `cancel-in-progress: false` on purpose. Cancelling a deploy after Pages has registered it orphans that deployment, and every later run is then rejected with `due to in progress deployment` until the stale record is cancelled by hand.
