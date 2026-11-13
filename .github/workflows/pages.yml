@@ -36,6 +36,29 @@ jobs:
         with:
           path: site
 
+      # The repo's own copy of the game: js/ and style.css at the root, so the
+      # code can be read and cloned from GitHub, not just played on Pages.
+      # It stops before pushing when nothing changed, which is also what keeps
+      # this run from triggering itself forever.
+      - name: Keep the repo source in sync
+        continue-on-error: true
+        run: |
+          git clone -q --depth 1 \
+            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" /tmp/repo
+          cd /tmp/repo
+          mkdir -p js
+          cp "$GITHUB_WORKSPACE/site/style.css" style.css
+          cp "$GITHUB_WORKSPACE"/site/js/*.js js/
+          git add -A
+          if git diff --cached --quiet; then
+            echo "source already matches the deployment"
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -qm "Sync the published source"
+          git push
+
       - name: Mirror the build to the gh-pages branch
         continue-on-error: true
         run: |
