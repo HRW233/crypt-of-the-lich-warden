@@ -220,6 +220,8 @@ const NET = {
     this.roomKey = '';
     this.chestOpen = -1;
     this.remote = new RemoteInput();
+    this.rtcReset();
+    this.rtcTries = 0;
     this.loop(game);
     this.post({ t: 'hb' });
     this.announce(game);
@@ -230,15 +232,20 @@ const NET = {
        players on this machine) and re-announces it to the public list. */
     this.gameRef = game;
     this.lastAnnounce = performance.now();
+    /* On a hosted relay every heartbeat is a billed write, so the timed one is
+       spread out: listings stay fresh for 50 s and a host is considered here
+       for 45, so 12 s is comfortably inside both. The direct link carries the
+       game itself and needs none of this. */
     if (this.hbTimer) clearInterval(this.hbTimer);
     this.hbTimer = setInterval(() => {
       if (this.role !== 'host' || !this.code) return;
       this.post({ t: 'hb' });
-      if (performance.now() - this.lastAnnounce >= NET_ANNOUNCE_MS && this.gameRef) {
+      const every = this.hosted ? 15000 : NET_ANNOUNCE_MS;
+      if (performance.now() - this.lastAnnounce >= every && this.gameRef) {
         this.lastAnnounce = performance.now();
         this.announce(this.gameRef);
       }
-    }, this.hosted ? NET_HB_MS * 3 : NET_HB_MS);
+    }, this.hosted ? 12000 : NET_HB_MS);
     game.beginLanHost();
     this.sockConnect(game, this.base);
   },
@@ -250,6 +257,13 @@ const NET = {
       game.onGuestLeave();
     }
     // keep this run on the public list while it is open
+    /* try the direct link a few times over the session. A failure is not an
+       error: the HTTP relay underneath already carries the game. */
+    if (this.guestHere && !this.p2p && !this.rtcPc && this.rtcTries < 3 &&
+        performance.now() - (this.rtcTried || 0) > 30000) {
+      this.rtcTries++;
+      this.rtcOffer(game);
+    }
     this.snapT += dt;
     const step = 1 / NET_SNAP_HZ;
     if (this.snapT >= step) {
@@ -325,6 +339,8 @@ const NET = {
     this.role = 'wait';
     this.since = 0;
     this.base = '';
+    this.rtcTries = 0;
+    this.rtcReset();
     this.view = null;
     this.enemyById.clear();
     this.enemyList.length = 0;
@@ -582,7 +598,7 @@ const NET = {
     this.snapAge += dt;
     this.inputT += dt;
     this.follow(game, dt);
-    if (this.inputT >= (this.hosted ? 0.1 : 1 / NET_INPUT_HZ)) {
+    if (this.inputT >= (this.hosted && !this.p2pOpen() ? 0.1 : 1 / NET_INPUT_HZ)) {
       this.inputT = 0;
       this.sendInput(game);
     }
@@ -622,6 +638,124 @@ const NET = {
     this.post({ t: 'in', d });
   },
 
+  /* ------------------------- direct link (p2p) --------------------- */
+
+  /* WebRTC, signaled through the relay: one offer, one answer, a STUN lookup,
+     then the two browsers talk straight to each other. A data channel costs
+     nothing per message, so a session stops being billed - which is what makes
+     unlimited play possible. The relay underneath stays as the fallback for
+     the network pairs where traversal fails (symmetric NATs, some phone
+     hotspots): those sessions still work, just on the meter. */
+
+  p2pOpen() {
+    return !!(this.p2p && this.p2p.readyState === 'open');
+  },
+
+  rtcReset() {
+    this.p2p = null;
+    if (this.rtcCh) { try { this.rtcCh.close(); } catch (err) { /* already gone */ } this.rtcCh = null; }
+    if (this.rtcPc) { try { this.rtcPc.close(); } catch (err) { /* already gone */ } this.rtcPc = null; }
+    if (this.rtcTimer) { clearTimeout(this.rtcTimer); this.rtcTimer = null; }
+  },
+
+  rtcDrop() {
+    const had = !!this.p2p;
+    this.rtcReset();
+    this.rtcTried = performance.now();
+    const game = this.gameRef || this.gameLocal;
+    if (had && game) game.toast = { text: 'DIRECT LINK LOST - BACK ON THE RELAY', t: 3.4 };
+  },
+
+  rtcCreate(game, isHost) {
+    this.gameLocal = game;
+    if (typeof RTCPeerConnection !== 'function') return null;
+    this.rtcReset();
+    let pc;
+    try {
+      pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+        ],
+      });
+    } catch (err) {
+      return null;
+    }
+    this.rtcPc = pc;
+    this.rtcHost = !!isHost;
+    pc.onicecandidate = (ev) => {
+      if (ev.candidate) this.post({ t: 'rtc', d: { k: 'ice', cand: ev.candidate } });
+    };
+    pc.onconnectionstatechange = () => {
+      const st = pc.connectionState;
+      if (st === 'failed' || st === 'closed') this.rtcDrop();
+    };
+    // a handshake that never finishes must not leave the guest waiting
+    this.rtcTimer = setTimeout(() => { if (!this.p2p) this.rtcDrop(); }, 15000);
+    return pc;
+  },
+
+  rtcBind(game, ch) {
+    this.gameLocal = game;
+    this.rtcCh = ch;
+    ch.onopen = () => {
+      this.p2p = ch;
+      this.rtcTried = performance.now();
+      if (this.rtcTimer) { clearTimeout(this.rtcTimer); this.rtcTimer = null; }
+      game.toast = { text: 'DIRECT LINK - NO PER-MESSAGE COST', t: 3 };
+      // the guest's first hello went through the relay: say it again on the
+      // link the host is actually listening to now
+      if (this.role === 'guest') {
+        this.post({ t: 'hello', d: { char: CHAR_LIST[game.charIndex].id, charIndex: game.charIndex } });
+      }
+    };
+    ch.onmessage = (ev) => {
+      try { this.handle(game, JSON.parse(ev.data)); } catch (err) { /* junk frame */ }
+    };
+    ch.onclose = () => { if (this.p2p === ch) this.rtcDrop(); };
+  },
+
+  rtcOffer(game) {
+    if (this.p2pOpen() || this.rtcPc) return;
+    const pc = this.rtcCreate(game, true);
+    if (!pc) return;
+    this.rtcBind(game, pc.createDataChannel('crypt', { ordered: true }));
+    pc.createOffer()
+      .then((o) => pc.setLocalDescription(o))
+      .then(() => this.post({
+        t: 'rtc',
+        d: { k: 'offer', sdp: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } },
+      }))
+      .catch(() => this.rtcDrop());
+  },
+
+  rtcSignal(game, d) {
+    if (!d || !d.k) return;
+    if (d.k === 'offer') {
+      // only the guest answers, and only one offer is ever in flight
+      if (this.role !== 'guest') return;
+      const pc = this.rtcPc || this.rtcCreate(game, false);
+      if (!pc) return;
+      pc.ondatachannel = (ev) => this.rtcBind(game, ev.channel);
+      pc.setRemoteDescription(d.sdp)
+        .then(() => pc.createAnswer())
+        .then((a) => pc.setLocalDescription(a))
+        .then(() => this.post({
+          t: 'rtc',
+          d: { k: 'answer', sdp: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } },
+        }))
+        .catch(() => this.rtcDrop());
+      return;
+    }
+    const pc = this.rtcPc;
+    if (!pc) return;
+    if (d.k === 'answer' && pc.signalingState === 'have-local-offer') {
+      pc.setRemoteDescription(d.sdp).catch(() => this.rtcDrop());
+    } else if (d.k === 'ice' && d.cand) {
+      pc.addIceCandidate(d.cand).catch(() => { /* a candidate that arrived late */ });
+    }
+  },
+
   /* ---------------------------- transport -------------------------- */
 
   url(route) {
@@ -655,9 +789,19 @@ const NET = {
 
   post(msg) {
     if (this.role === 'off' || !this.code) return;
+    /* Once the browsers are talking to each other the relay is out of the
+       loop: game traffic costs nothing per message, which is the whole point
+       of the direct link. Heartbeats stay on HTTP because they are what keeps
+       the room listed, and signaling has to stay on the relay by definition. */
+    if (msg.t !== 'rtc' && msg.t !== 'hb' && this.p2pOpen()) {
+      try {
+        this.p2p.send(JSON.stringify(msg));
+        return;
+      } catch (err) { /* channel closing: fall through to the relay */ }
+    }
     // snapshots are disposable: rate-limit them by timestamp so a stalled
     // connection can never wedge the session the way a boolean lock would
-    if (msg.t === 'snap') {
+    if (msg.t === 'snap' && !this.p2pOpen()) {
       const now = performance.now();
       if (now - (this.lastSnapPost || 0) < (this.hosted ? 120 : 45)) return;
       this.lastSnapPost = now;
@@ -672,9 +816,9 @@ const NET = {
 
   async loop(game) {
     while (this.role !== 'off') {
-      // with the socket live the messages are pushed, so polling would only
-      // deliver them a second time
-      if (this.sock && this.sock.connected) {
+      // with a live socket or data channel the messages are pushed, so
+      // polling would only deliver them a second time
+      if (this.p2pOpen() || (this.sock && this.sock.connected)) {
         await netSleep(1000);
         continue;
       }
@@ -725,6 +869,8 @@ const NET = {
     this.rooms = [];
     this.gameRef = null;
     this.lastAnnounce = 0;
+    this.rtcTries = 0;
+    this.rtcReset();
     if (this.hbTimer) clearInterval(this.hbTimer);
     this.hbTimer = null;
     this.sockClose();
@@ -746,6 +892,10 @@ const NET = {
           game.onGuestHello(d || {});
           this.roomKey = '';
         }
+        // a guest is here: try to move the game onto a direct link
+        this.rtcOffer(game);
+      } else if (m.t === 'rtc') {
+        this.rtcSignal(game, d || {});
       } else if (m.t === 'in') {
         this.lastSeenFromGuest = performance.now();
         // a guest that comes back after a dropout rejoins automatically
@@ -764,6 +914,10 @@ const NET = {
     }
 
     // guest
+    if (m.t === 'rtc') {
+      this.rtcSignal(game, d || {});
+      return;
+    }
     if (m.t === 'room') {
       this.applyRoom(d || {});
     } else if (m.t === 'snap') {
