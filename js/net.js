@@ -139,12 +139,20 @@ const NET = {
   manual: loadNetAddr(),
   joining: false,
   useList: true,
+  // hosting is on screen from the click, not from whenever the relay answers
+  hostWait: false,
+  hostError: '',
 
   /* ------------------------------ host ----------------------------- */
 
   /* The relay has to exist before a session makes sense: the hosted build is
      static, so H there explains how to run the server instead of hanging. */
   hostStart(game) {
+    // H has to do something the player can see. The relay lookup is a round
+    // trip, and on a build with no relay it fails outright, so the title
+    // screen holds a panel with the address from the moment HOST is clicked.
+    this.hostWait = true;
+    this.hostError = '';
     fetch('/lan/hello', { cache: 'no-store' })
       .then((r) => {
         if (!r.ok) throw new Error('no relay');
@@ -153,17 +161,22 @@ const NET = {
       .then((d) => {
         const ip = (d.ips && d.ips[0]) || window.location.hostname;
         this.address = 'http://' + ip + ':' + (d.port || window.location.port) + '/';
+        this.hostWait = false;
         this.beginHost(game);
       })
       .catch(() => {
         this.role = 'off';
         game.netRole = 'off';
         game.state = 'title';
-        game.toast = { text: 'TO HOST: RUN node server/lan.js (J LISTS RUNS)', t: 4.5 };
+        // the panel stays up, now spelling out what is missing: the address
+        // it already shows becomes right the moment the relay is started
+        this.hostError = 'RELAY NOT RUNNING - RUN node server/lan.js';
       });
   },
 
   beginHost(game) {
+    this.hostWait = false;
+    this.hostError = '';
     this.role = 'host';
     this.peer = 'host-' + Math.floor(Math.random() * 1000);
     this.code = netCode();

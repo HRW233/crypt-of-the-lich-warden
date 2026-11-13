@@ -519,7 +519,7 @@ function inRect(px, py, r) {
 }
 
 const FINAL_FLOOR = 5;
-const BUILD_TAG = 'v4.27';
+const BUILD_TAG = 'v4.28';
 const RECORD_KEY = 'lichwarden.records.v1';
 
 const RECORD_DEFAULTS = {
@@ -887,7 +887,8 @@ class Game {
     for (const c of clicks) this.handleClick(c.x, c.y);
 
     if (this.state === 'title') {
-      if (input.pressed('enter') || input.pressed('space')) this.startRun();
+      if (input.pressed('escape') && NET && NET.hostWait) NET.hostWait = false;
+      else if (input.pressed('enter') || input.pressed('space')) this.startRun();
       else if (input.pressed('h')) this.titleAction('host');
       else if (input.pressed('j')) this.titleAction('join');
       else if (input.pressed('l')) this.titleAction('vault');
@@ -1962,6 +1963,8 @@ class Game {
   startRun() {
     this.sound.init();
     this.sound.resume();
+    // any start of a run settles the hosting panel: the address chip carries it
+    if (typeof NET !== 'undefined') NET.hostWait = false;
     this.releaseRecords();
     // a locked hero (an old save, or a fresh account) never starts a run
     if (!charUnlocked(CHAR_LIST[this.charIndex].id, this.records)) this.charIndex = 0;
@@ -2093,6 +2096,10 @@ class Game {
       return;
     }
     if (this.netRole === 'host' && NET && inRect(x, y, this.hostAddrRect || HOST_ADDR_RECT)) {
+      this.copyJoinAddress();
+      return;
+    }
+    if (this.state === 'title' && NET && NET.hostWait && inRect(x, y, this.hostWaitRect || { x: 0, y: 0, w: 0, h: 0 })) {
       this.copyJoinAddress();
       return;
     }
@@ -3235,6 +3242,34 @@ class Game {
     );
   }
 
+  /* Hosting shows its own panel from the click, before the relay answers: the
+     address is on screen even while the lookup is in flight, and when it fails
+     the panel says why instead of leaving the title screen untouched. */
+  drawHostWait(ctx) {
+    const w = 336;
+    const h = 56;
+    const r = { x: Math.round((VIEW_W - w) / 2), y: 94, w, h };
+    this.hostWaitRect = r;
+    const m = this.input.touchMode ? { x: -99, y: -99 } : this.input.mouseWorld();
+    const hov = inRect(m.x, m.y, r);
+    ctx.fillStyle = 'rgba(5,5,9,0.94)';
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.fillStyle = hov ? C.cyan : 'rgba(0,245,212,0.45)';
+    ctx.fillRect(r.x, r.y, r.w, 1);
+    ctx.fillRect(r.x, r.y + r.h - 1, r.w, 1);
+    ctx.fillRect(r.x, r.y, 1, r.h);
+    ctx.fillRect(r.x + r.w - 1, r.y, 1, r.h);
+    Text.draw(ctx, 'HOSTING - P2 OPENS THIS ADDRESS', r.x + 8, r.y + 6, C.white, 1, 'left');
+    Text.draw(ctx, this.lanAddress(), VIEW_W / 2, r.y + 18, hov ? C.white : C.gold, 2, 'center');
+    if (NET.hostError) {
+      Text.draw(ctx, NET.hostError, VIEW_W / 2, r.y + 39, C.heart, 1, 'center');
+      Text.draw(ctx, 'START IT, THEN CLICK HOST AGAIN  -  ESC CLOSES', VIEW_W / 2, r.y + 48, '#59636f', 1, 'center');
+    } else {
+      Text.draw(ctx, 'CLICK TO COPY  -  ESC CLOSES', VIEW_W / 2, r.y + 39, '#59636f', 1, 'center');
+      Text.draw(ctx, 'ASKING THE RELAY FOR THE LAN ADDRESS', VIEW_W / 2, r.y + 48, '#3d4350', 1, 'center');
+    }
+  }
+
   /* One click hands P1 the address to send to P2. */
   copyJoinAddress() {
     const addr = this.lanAddress();
@@ -3741,6 +3776,9 @@ class Game {
     // version sits opposite the FPS readout so the two never collide
     Text.draw(ctx, BUILD_TAG, MUTE_RECT.x + MUTE_RECT.w + 4, VIEW_H - 10, '#39424f', 1, 'left');
     drawSpeaker(ctx, MUTE_RECT.x + 3, MUTE_RECT.y + 4, this.sound.muted, 1);
+
+    // last, so the panel sits over everything while hosting is being set up
+    if (NET && NET.hostWait) this.drawHostWait(ctx);
   }
 
   /* The card art is the same sprite the game draws, scaled up, so the
