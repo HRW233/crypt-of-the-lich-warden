@@ -52,9 +52,9 @@ Two players, one run. P1's browser simulates everything; P2 sends input and draw
 
 ### Nothing to install
 
-On the published page, press **H** to host. The site's own Worker carries the traffic - messages and host presence live in D1 - so there is no server to run anywhere. P2 opens the same page, presses **J**, sees the room in the list and joins.
+Press **H** on either the published site or the GitHub Pages mirror. The site's own Worker carries the traffic - messages and host presence live in D1 - so there is no server to run anywhere. The Pages mirror is a static copy and has no Worker of its own, so it uses this same relay at the published site. P2 opens the same URL, presses **J**, sees the room in the list and joins.
 
-This relay is a short-poll store rather than a socket, so the client halves its snapshot and input rates while it is talking to it. Co-op is playable but looser than on a LAN, and every message is one billed request: good for a session, not the thing to use if you play for hours every night.
+That relay is a short-poll store rather than a socket, so the client halves its snapshot and input rates while it is talking to it. Co-op is playable but looser than on a LAN, and every message is one billed request: good for a session, not the thing to use if you play for hours every night.
 
 ### With Lance, on a LAN
 
@@ -80,7 +80,7 @@ Plain node, nothing to install: the static server plus a long-poll relay. Same r
 Whichever server is in play, the flow is the same:
 
 1. P1 presses **H**. A panel shows the address and room code straight away, then a chip under the score keeps them on screen for the whole session - click it to copy.
-2. P2 opens the same page (or P1's address, when they are hosting on the LAN), presses **J**, and picks the room from the list. Typing P1's address in the `P1 ADDRESS` box still works and is remembered, for when the list cannot reach you.
+2. P2 opens the same URL, presses **J**, and picks the room from the list. Typing P1's address in the `P1 ADDRESS` box still works and is remembered, for when the list cannot reach you.
 3. Press **P** to pause: in co-op a pause is a vote, so it only takes effect when both players ask for it, and both must release it.
 
 Rooms are listed while their host is still talking. The host heartbeats on a timer rather than from the render loop, so alt-tabbing to send P2 the address does not drop the room off the list.
