@@ -519,7 +519,7 @@ function inRect(px, py, r) {
 }
 
 const FINAL_FLOOR = 5;
-const BUILD_TAG = 'v4.28';
+const BUILD_TAG = 'v4.29';
 const RECORD_KEY = 'lichwarden.records.v1';
 
 const RECORD_DEFAULTS = {
@@ -3259,7 +3259,10 @@ class Game {
     ctx.fillRect(r.x, r.y + r.h - 1, r.w, 1);
     ctx.fillRect(r.x, r.y, 1, r.h);
     ctx.fillRect(r.x + r.w - 1, r.y, 1, r.h);
-    Text.draw(ctx, 'HOSTING - P2 OPENS THIS ADDRESS', r.x + 8, r.y + 6, C.white, 1, 'left');
+    // with no relay behind the page the address below is not one P2 can use,
+    // so the heading says what is actually wrong instead of inviting a send
+    const head = NET.hostError ? 'HOSTING NEEDS THE RELAY' : 'HOSTING - P2 OPENS THIS ADDRESS';
+    Text.draw(ctx, head, r.x + 8, r.y + 6, NET.hostError ? C.heart : C.white, 1, 'left');
     Text.draw(ctx, this.lanAddress(), VIEW_W / 2, r.y + 18, hov ? C.white : C.gold, 2, 'center');
     if (NET.hostError) {
       Text.draw(ctx, NET.hostError, VIEW_W / 2, r.y + 39, C.heart, 1, 'center');
