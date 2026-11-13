@@ -24,7 +24,7 @@ jobs:
           base="https://site-497624e43cfb49f8a58564653cb22aff.freebuff.page"
           curl -fsSL "$base/" -o site/index.html
           curl -fsSL "$base/style.css" -o site/style.css
-          for f in core sound particles bullets dungeon player enemies upgrades bosses game; do
+          for f in core sound particles bullets dungeon player enemies upgrades bosses net game; do
             curl -fsSL "$base/js/$f.js" -o "site/js/$f.js"
           done
           ls -l site site/js
