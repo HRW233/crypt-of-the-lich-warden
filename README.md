@@ -2,7 +2,7 @@
 
 A neon-arcane pixel bullet-hell roguelike that runs in one browser tab. Five floors, five bosses, 176 relics, six heroes, and a two-player co-op mode.
 
-No build step for the game itself: every sprite is drawn with the canvas API at runtime and the scripts load with plain `<script>` tags.
+No build step and no image files: every sprite is drawn with the canvas API at runtime, and the scripts load with plain `<script>` tags.
 
 **Play:** https://hrw233.github.io/crypt-of-the-lich-warden/
 
@@ -36,7 +36,7 @@ Five floors, each a set of generated rooms ending in a boss. Clearing a room ope
 - **MAGE** - balanced arcing bolts.
 - **WIZARD** - mana caster with a four-spell book: Arcane Bolt, Frost Lance, Ember Fan, Void Orb.
 - **SNIPER** - one huge shot on a long reload, with cycling ammo types.
-- **KNIGHT** - sword only, heavy armor, and bullets that cross the swing are parried back at the closest enemy.
+- **KNIGHT** - sword only, heavy armor, and bullets that cross the swing are parried.
 - **PYROMANCER** - flamethrower with stacking burn ticks.
 - **CRYOMANCER** - snowstorm and spell book; unlocks only after you win a run once.
 
@@ -48,42 +48,41 @@ A run holds at most **four** relics. Every draft offers **three rerolls** and ca
 
 ## Co-op
 
-Two players, one run. P1's browser simulates everything; P2 sends input and draws what P1 reports. Nothing about the game changes between the three ways to connect it.
+Two machines, one run. P1's browser simulates everything; P2 sends input and draws what P1 reports. Nothing to install, no account, no server on anyone's machine:
 
-### Nothing to install
-
-Press **H** on either the published site or the GitHub Pages mirror. The site's own Worker carries the traffic - messages and host presence live in D1 - so there is no server to run anywhere. The Pages mirror is a static copy and has no Worker of its own, so it uses this same relay at the published site. P2 opens the same URL, presses **J**, sees the room in the list and joins.
-
-That relay is a short-poll store rather than a socket, so the client halves its snapshot and input rates while it is talking to it. Co-op is playable but looser than on a LAN, and every message is one billed request: good for a session, not the thing to use if you play for hours every night.
-
-### With Lance, on a LAN
-
-[Lance](https://github.com/lance-gg/lance) (`lance-gg`) owns a socket.io server on P1's machine: connections, rooms, the ping/latency monitor. The game's snapshots and inputs ride its sockets.
-
-```
-npm install
-npm run lance        # same as: node server/lance.mjs
-```
-
-Lance's model is a server that runs the game logic. This game does not work that way - P1's browser is the authority - so the server-side game engine is deliberately empty and Lance provides the network, not the rules. See the comment at the top of `server/lance.mjs`.
-
-### With no dependencies at all
-
-```
-node server/lan.js
-```
-
-Plain node, nothing to install: the static server plus a long-poll relay. Same rooms, same join list, a little more latency than the socket.
-
-### Joining
-
-Whichever server is in play, the flow is the same:
-
-1. P1 presses **H**. A panel shows the address and room code straight away, then a chip under the score keeps them on screen for the whole session - click it to copy.
-2. P2 opens the same URL, presses **J**, and picks the room from the list. Typing P1's address in the `P1 ADDRESS` box still works and is remembered, for when the list cannot reach you.
+1. P1 presses **H**. A chip under the score shows the room code for the whole session.
+2. P2 opens the same URL, presses **J**, and picks the room from the list.
 3. Press **P** to pause: in co-op a pause is a vote, so it only takes effect when both players ask for it, and both must release it.
 
-Rooms are listed while their host is still talking. The host heartbeats on a timer rather than from the render loop, so alt-tabbing to send P2 the address does not drop the room off the list.
+### How the connection is made
+
+Hosting asks the page's own origin for a relay. Whatever answers - the published site's Worker, or a `server/lan.js` someone is running - is used for one job: signaling. The two browsers then open a direct WebRTC data channel, and snapshots (20 Hz) and guest input (30 Hz) cross that channel. A data channel costs nothing per message, so sessions are not metered and there is no daily play limit.
+
+The relay stays underneath as a fallback. On the network pairs where traversal fails (symmetric NATs, some phone hotspots) it carries the game instead, at a halved snapshot rate - the session works, it is just slower and it does use the relay's write quota. A lost direct link drops back to the relay mid-run and says so.
+
+### Hosting a relay on the LAN
+
+Sometimes the fast path is worth running: no STUN lookup, no traversal, one hop on the local network.
+
+```
+node server/lan.js          # no dependencies
+npm run lance               # Lance (lance-gg) + socket.io, after npm install
+```
+
+It prints both addresses:
+
+```
+  this machine : http://localhost:8080/
+  on the LAN   : http://192.168.1.204:8080/
+```
+
+`PORT=9000 node server/lan.js` if 8080 is taken. Opening the page from that server means the direct link is not needed at all, though it will still be attempted.
+
+[Lance](https://github.com/lance-gg/lance) owns a socket.io server on P1's machine: connections, rooms, the ping/latency monitor. Its game engine is deliberately empty - this game has no server-side rules, P1's browser is the authority - so Lance provides the network, not the simulation. See the comment at the top of `server/lance.mjs`.
+
+### Joining by address
+
+`ROOMS` (J) lists open runs from a public registry. The list is a convenience, not the only door: typing P1's address in the `P1 ADDRESS` box still works and is remembered, for when the list cannot reach you.
 
 ## Project layout
 
@@ -99,10 +98,10 @@ js/bullets.js         player projectiles
 js/upgrades.js        the relic pool, tiers, unlock gates
 js/particles.js       the particle system
 js/sound.js           synthesised audio (no files)
-js/net.js             co-op transport, lobby, guest view
+js/net.js             co-op transport, direct link, lobby, guest view
 js/game.js            input, state machine, HUD, every screen
 js/socket.io.min.js   vendored socket.io client (MIT)
-deploy/worker.js      the site: static files, run registry, hosted relay
+deploy/worker.js      the site: static files, run registry, relay, signaling
 server/relay.js       static server + relay, shared by both entry points
 server/lan.js         dependency-free server
 server/lance.mjs      Lance (lance-gg) + socket.io server
@@ -110,7 +109,7 @@ package.json          lance-gg, socket.io, socket.io-client
 tools/testbot.js      balance bot (test only, never shipped)
 ```
 
-The game loads its scripts in the order above, so `core.js` must stay first and `game.js` last. There is no bundler.
+There is no bundler: `index.html` loads the files in a fixed order, so `core.js` must stay first and `game.js` last.
 
 ## How the GitHub Pages copy is built
 
@@ -120,7 +119,7 @@ On every push to `main` the workflow:
 
 1. downloads `index.html`, `style.css` and every `js/*.js` the page asks for, from the deployment;
 2. writes `js/` and `style.css` back into this repository, so the code here matches what ships (it skips the commit when nothing changed, which is what stops it from re-triggering itself);
-3. checks that the clone could actually host co-op - index.html, style.css, the server files, package.json and the bot, plus a script count taken from `index.html`;
+3. checks that a clone could actually host co-op;
 4. mirrors the same files to the `gh-pages` branch and publishes the artifact with `actions/deploy-pages`.
 
 One caveat worth knowing: the `pages` concurrency group uses `cancel-in-progress: false` on purpose. Cancelling a deploy after Pages has registered it orphans that deployment, and every later run is then rejected with `due to in progress deployment` until the stale record is cancelled by hand.
