@@ -21,7 +21,11 @@ const os = require('os');
 const ROOT = path.resolve(__dirname, '..');
 const PORT = Number(process.env.PORT) || 8080;
 const POLL_HOLD_MS = 15000;
-const ROOM_IDLE_MS = 60000;
+const ROOM_IDLE_MS = 180000;
+/* A hidden tab throttles its timers, so a host can easily be a minute late with
+   a heartbeat. Keeping the room listed a little longer costs nothing: a guest
+   who joins a dead room sees the host-started screen and leaves. */
+const HOST_FRESH_MS = 45000;
 const QUEUE_MAX = 400;
 
 const MIME = {
@@ -157,7 +161,7 @@ function handleRelay(req, res, url) {
     const open = [];
     for (const r of rooms.values()) {
       let alive = false;
-      for (const ts of r.hosts.values()) if (now - ts < 10000) alive = true;
+      for (const ts of r.hosts.values()) if (now - ts < HOST_FRESH_MS) alive = true;
       if (alive) open.push(r.code);
     }
     json(res, 200, { ok: true, open });
