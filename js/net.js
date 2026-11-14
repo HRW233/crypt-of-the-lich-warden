@@ -1044,6 +1044,18 @@ const NET = {
     }
     this.enemyList = Array.from(this.enemyById.values());
     v.enemies = this.enemyList;
+    /* The boss's phase decides its colours, so the partner's copy follows the
+       host's rather than sitting on phase one all fight. Only the visuals: the
+       guest never runs a boss's attack logic. */
+    if (v.boss) {
+      const boss = this.enemyList.filter((e) => e.isBoss)[0];
+      if (boss) {
+        boss.phase = v.boss.phase || boss.phase || 1;
+        boss.phaseCount = v.boss.phaseCount || boss.phaseCount;
+        if (v.boss.color) boss.barColor = v.boss.color;
+        if (v.boss.name) boss.name = v.boss.name;
+      }
+    }
     const bl = this.unpackBullets(d.b);
     v.bullets = bl;
     this.syncBullets(bl);
