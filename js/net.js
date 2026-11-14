@@ -1144,8 +1144,10 @@ const NET = {
       if (p2.alive && !(this.view && this.view.state === 'paused')) {
         this.predict(game, p2, dt);
       } else if (typeof p2.tx === 'number') {
-        p2.x += (p2.tx - p2.x) * k;
-        p2.y += (p2.ty - p2.y) * k;
+        // no prediction while dead or paused: follow the snapshot directly
+        const ease = 1 - Math.exp(-dt * 26);
+        p2.x += (p2.tx - p2.x) * ease;
+        p2.y += (p2.ty - p2.y) * ease;
       }
     }
 
