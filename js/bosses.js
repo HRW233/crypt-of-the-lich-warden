@@ -1172,3 +1172,29 @@ function makeBoss(room) {
   if (floor === 2) return new BoneTitan(VIEW_W / 2, 104, room);
   return new LichWarden(VIEW_W / 2, 96, room);
 }
+
+/* ---------------------------- co-op -------------------------------- */
+
+/* The guest rebuilds a boss from the class name the host sends. makeEnemy()
+   only knows the ordinary kinds, so without this every boss arrives as an
+   acolyte and the partner sees the wrong thing on screen. */
+const BOSS_VIEWS = {
+  LichWarden,
+  BoneTitan,
+  CrimsonChoir,
+  ObsidianSeraph,
+  Devourer,
+};
+
+function bossKind(e) {
+  if (!e || !e.isBoss) return 0;
+  return (e.constructor && e.constructor.name) || 0;
+}
+
+function bossView(kind, x, y, room) {
+  if (!kind || !Object.prototype.hasOwnProperty.call(BOSS_VIEWS, kind)) return null;
+  const K = BOSS_VIEWS[kind];
+  const e = new K(x, y, room);
+  e.isBoss = true;
+  return e;
+}

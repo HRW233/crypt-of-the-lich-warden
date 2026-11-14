@@ -298,6 +298,8 @@ const NET = {
         e.slowT > 0 ? 1 : 0,
         Math.min(99, e.burnStacks || 0),
         e.id | 0,
+        // a boss carries its class, so the guest can build the real thing
+        bossKind(e),
       ]);
     }
     /* Bullets are most of a snapshot, and at 30 Hz the bytes are what a slow
@@ -1008,11 +1010,14 @@ const NET = {
     this.lastSnapAt = nowMs;
     const alive = new Set();
     for (const rec of d.e || []) {
-      const [type, x, y, hp, mhp, st, slow, burn, id] = rec;
+      const [type, x, y, hp, mhp, st, slow, burn, id, kind] = rec;
       alive.add(id);
       let e = this.enemyById.get(id);
-      if (!e || e.type !== type) {
-        e = makeEnemy(type, x, y, id, this.fakeRoom);
+      // a boss arrives as a class name, not a kind: rebuild it as itself
+      const wrongBoss = kind ? !e || !e.isBoss : e && e.isBoss;
+      if (!e || e.type !== type || wrongBoss) {
+        e = (kind && bossView(kind, x, y, this.fakeRoom)) || makeEnemy(type, x, y, id, this.fakeRoom);
+        e.id = id;
         e.x = x;
         e.y = y;
         this.enemyById.set(id, e);
@@ -1132,6 +1137,8 @@ const NET = {
       }
     }
     for (const e of this.enemyList) {
+      // idle animation and flashes run on the guest too
+      e.t = (e.t || 0) + dt;
       const s = this.sampleHist(e.hist, now, gap);
       if (!s) continue;
       e.x = s.x;
