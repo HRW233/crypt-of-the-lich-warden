@@ -980,7 +980,20 @@ const NET = {
     v.state = d.s;
     v.pv = d.pv || [0, 0];
     v.boss = d.bs
-      ? { name: d.bs[0], hp: d.bs[1], maxHp: d.bs[2], phase: d.bs[3], phaseCount: d.bs[4], color: d.bs[5] }
+      ? {
+        name: d.bs[0],
+        hp: d.bs[1],
+        maxHp: d.bs[2],
+        phase: d.bs[3],
+        phaseCount: d.bs[4],
+        color: d.bs[5],
+        state: d.bs[6] || 'idle',
+        attack: d.bs[7] || '',
+        attackT: d.bs[8] || 0,
+        staffGlow: d.bs[9] || 0,
+        rot: d.bs[10] || 0,
+        spawnT: d.bs[11] || 0,
+      }
       : null;
     v.floor = d.f || v.floor || 1;
     v.score = d.sc || 0;
@@ -1054,6 +1067,12 @@ const NET = {
         boss.phaseCount = v.boss.phaseCount || boss.phaseCount;
         if (v.boss.color) boss.barColor = v.boss.color;
         if (v.boss.name) boss.name = v.boss.name;
+        // the telegraph: same state, same move, same point in the wind-up
+        boss.state = v.boss.state;
+        boss.attack = v.boss.attack;
+        boss.attackT = v.boss.attackT;
+        boss.staffGlow = v.boss.staffGlow;
+        boss.rot = v.boss.rot;
       }
     }
     const bl = this.unpackBullets(d.b);
@@ -1548,6 +1567,7 @@ function bossRec(room) {
     ? (room.enemies || []).find((e) => e.isBoss && !e.dead)
     : null;
   if (!boss) return null;
+  const r2 = (v) => Math.round((v || 0) * 100) / 100;
   return [
     boss.name || '',
     Math.round(boss.hp),
@@ -1555,6 +1575,15 @@ function bossRec(room) {
     boss.phase || 1,
     boss.phaseCount || 1,
     boss.barColor || '',
+    /* What the boss is doing, so the partner's copy can raise the same
+       telegraph: its attacks are drawn from these, and without them the
+       guest only ever saw an idle boss. */
+    boss.state || 'idle',
+    boss.attack || '',
+    r2(boss.attackT),
+    r2(boss.staffGlow),
+    r2(boss.rot),
+    r2(boss.spawnT),
   ];
 }
 
