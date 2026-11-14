@@ -605,12 +605,6 @@ const NET = {
       this.inputT = 0;
       this.sendInput(game);
     }
-    // a round trip, once a second, is what the lead above is built from
-    this.pingT = (this.pingT || 0) + dt;
-    if (this.pingT >= 1 && this.p2pOpen()) {
-      this.pingT = 0;
-      this.post({ t: 'ping', d: { s: performance.now() } });
-    }
     if (this.view && this.view.room) {
       const room = this.view.room;
       if (room.chest) room.chest.anim = (room.chest.anim || 0) + dt;
@@ -905,9 +899,6 @@ const NET = {
         this.rtcOffer(game);
       } else if (m.t === 'rtc') {
         this.rtcSignal(game, d || {});
-      } else if (m.t === 'ping') {
-        this.lastSeenFromGuest = performance.now();
-        this.post({ t: 'pong', d: d });
       } else if (m.t === 'in') {
         this.lastSeenFromGuest = performance.now();
         // a guest that comes back after a dropout rejoins automatically
@@ -930,10 +921,7 @@ const NET = {
       this.rtcSignal(game, d || {});
       return;
     }
-    if (m.t === 'pong') {
-      this.onPong(d || {});
-      return;
-    }
+
     if (m.t === 'room') {
       this.applyRoom(d || {});
     } else if (m.t === 'snap') {
@@ -994,10 +982,21 @@ const NET = {
     }
     this.p1 = mirrorPlayer(this.p1, d.p1, false);
     this.p2 = mirrorPlayer(this.p2, d.p2, true);
+    if (this.p1) {
+      this.p1.hist = this.p1.hist || [];
+      this.p1.hist.push({ t: nowMs, x: d.p1.x, y: d.p1.y });
+      if (this.p1.hist.length > 12) this.p1.hist.shift();
+    }
 
     this.fakeRoom.depth = v.floor;
     this.fakeRoom.floor = v.floor;
     const nowMs = performance.now();
+    // how far apart snapshots actually arrive: the guest renders that far back
+    if (this.lastSnapAt) {
+      const gap = nowMs - this.lastSnapAt;
+      if (gap > 0 && gap < 500) this.snapGap = this.snapGap ? this.snapGap * 0.8 + gap * 0.2 : gap;
+    }
+    this.lastSnapAt = nowMs;
     const alive = new Set();
     for (const rec of d.e || []) {
       const [type, x, y, hp, mhp, st, slow, burn, id] = rec;
@@ -1009,17 +1008,10 @@ const NET = {
         e.y = y;
         this.enemyById.set(id, e);
       }
-      /* The snapshot is a position from one trip ago, so the target the view
-         aims at is that position plus where it has been heading since. The
-         velocity comes from the last two snapshots. */
-      if (typeof e.tx === 'number' && e.atMs) {
-        const dts = Math.max(0.008, (nowMs - e.atMs) / 1000);
-        e.vx = (x - e.tx) / dts;
-        e.vy = (y - e.ty) / dts;
-        // a spawn or a blink is not a velocity
-        if (Math.hypot(e.vx, e.vy) > 900) { e.vx = 0; e.vy = 0; }
-      }
-      e.atMs = nowMs;
+      // positions in arrival order: the view interpolates between them
+      e.hist = e.hist || [];
+      e.hist.push({ t: nowMs, x, y });
+      if (e.hist.length > 12) e.hist.shift();
       e.tx = x;
       e.ty = y;
       e.hp = hp;
@@ -1057,20 +1049,34 @@ const NET = {
     return out;
   },
 
-  /* One trip's worth of lead, from a ping the host echoes. Half a round trip
-     is exactly how far behind the host's world a snapshot is when it lands. */
-  lead() {
-    return Math.min(0.25, (this.rtt || 0) / 2000);
+  /* Where a remote thing was at a given moment, from the history its snapshots
+     built. Between two samples it is a straight line, so a lerp is exact; just
+     past the newest one there is a short extrapolation, capped so a stalled
+     host cannot fling anything across the room. */
+  sampleHist(hist, rt) {
+    if (!hist || !hist.length) return null;
+    if (hist.length === 1) return { x: hist[0].x, y: hist[0].y };
+    const last = hist[hist.length - 1];
+    if (rt >= last.t) {
+      const prev = hist[hist.length - 2];
+      const span = Math.max(8, last.t - prev.t);
+      const over = Math.min(80, rt - last.t) / span;
+      return { x: last.x + (last.x - prev.x) * over, y: last.y + (last.y - prev.y) * over };
+    }
+    for (let i = hist.length - 1; i > 0; i--) {
+      const a = hist[i - 1];
+      const b = hist[i];
+      if (a.t <= rt) {
+        const span = Math.max(1, b.t - a.t);
+        const k = Math.max(0, Math.min(1, (rt - a.t) / span));
+        return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
+      }
+    }
+    return { x: hist[0].x, y: hist[0].y };
   },
 
-  onPong(d) {
-    if (!d || typeof d.s !== 'number') return;
-    const rtt = performance.now() - d.s;
-    if (rtt >= 0 && rtt < 4000) this.rtt = this.rtt ? this.rtt * 0.7 + rtt * 0.3 : rtt;
-  },
-
-  /* Bullets move in straight lines most of the time, so the guest runs each
-     one forward from the snapshot it arrived in instead of stepping at 20 Hz. */
+  /* Bullets move in straight lines, so the guest runs each one from the
+     snapshot it arrived in instead of stepping at the snapshot rate. */
   syncBullets(list) {
     const now = performance.now();
     const out = this.bulletList;
@@ -1092,23 +1098,30 @@ const NET = {
     }
   },
 
-  /* Per-frame view work on the guest: predict its own hero, ease everyone
-     else toward the last snapshot, run bullets forward. */
+  /* Per-frame view work on the guest: simulate its own hero, interpolate
+     everything else onto a timeline one snapshot behind, run bullets along
+     that same timeline so they and the enemies agree on where they are. */
   follow(game, dt) {
-    // a stiffer ease reads as the host's movement rather than a trail of it;
-    // the leading term above supplies the distance the ease would lose
-    const k = 1 - Math.exp(-dt * 26);
-    const lead = this.lead();
+    const now = performance.now();
+    // render a little more than one snapshot back: enough that a packet
+    // arriving a few milliseconds late still has both samples to interpolate
+    const gap = Math.max(16, Math.min(200, this.snapGap || 40));
+    const rt = now - Math.min(150, gap * 1.25);
+    this.renderAt = rt;
 
     const p1 = this.p1;
-    if (p1 && typeof p1.tx === 'number') {
-      p1.x += (p1.tx - p1.x) * k;
-      p1.y += (p1.ty - p1.y) * k;
+    if (p1) {
+      const s = this.sampleHist(p1.hist, rt);
+      if (s) {
+        p1.x = s.x;
+        p1.y = s.y;
+      }
     }
     for (const e of this.enemyList) {
-      if (typeof e.tx !== 'number') continue;
-      e.x += ((e.tx + (e.vx || 0) * lead) - e.x) * k;
-      e.y += ((e.ty + (e.vy || 0) * lead) - e.y) * k;
+      const s = this.sampleHist(e.hist, rt);
+      if (!s) continue;
+      e.x = s.x;
+      e.y = s.y;
     }
 
     const p2 = this.p2;
@@ -1122,11 +1135,12 @@ const NET = {
       }
     }
 
-    const now = performance.now();
     for (const b of this.bulletList) {
-      // run them on by the trip time too, so they are drawn where the host has
-      // them now rather than where they were when the packet left
-      const age = Math.min(0.3, (now - b.at) / 1000 + lead);
+      /* The same render clock as the enemies. "at" is when the snapshot
+         arrived, which is later than the moment being drawn, so the age is
+         usually negative: that is the bullet's exact earlier position on a
+         straight line, and it keeps the two in step. */
+      const age = Math.max(-0.25, Math.min(0.3, (rt - b.at) / 1000));
       b.rx = b.x + b.vx * age;
       b.ry = b.y + b.vy * age;
     }
@@ -1543,17 +1557,20 @@ function mirrorPlayer(state, rec, own) {
   state.tx = rec.x;
   state.ty = rec.y;
   state.speed = rec.sp || state.speed;
-  // the guest's own hero is predicted locally; everyone else eases over
-  if (own) {
-    const err = Math.hypot(state.x - rec.x, state.y - rec.y);
-    if (!rec.al || err > 60) {
-      state.x = rec.x;
-      state.y = rec.y;
-    } else if (err > 1) {
-      state.x += (rec.x - state.x) * 0.45;
-      state.y += (rec.y - state.y) * 0.45;
+      /* The guest's own hero is simulated here, so the snapshot is a correction,
+       not the truth: a big gap (respawn, teleport, a dash it never saw) snaps,
+       everything else is bled off over a few frames instead of tugging at the
+       hero on every packet. */
+    if (own) {
+      const err = Math.hypot(state.x - rec.x, state.y - rec.y);
+      if (!rec.al || err > 48) {
+        state.x = rec.x;
+        state.y = rec.y;
+      } else if (err > 0.5) {
+        state.x += (rec.x - state.x) * 0.18;
+        state.y += (rec.y - state.y) * 0.18;
+      }
     }
-  }
   state.facing = rec.f;
   state.aim = rec.a;
   state.alive = !!rec.al;
