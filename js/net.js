@@ -1430,8 +1430,15 @@ const NET = {
       }
     }
 
-    if (this.p2) this.p2.draw(ctx, game);
-    if (this.p1) this.p1.draw(ctx, game);
+    if (this.p2) {
+      this.p2.draw(ctx, game);
+      if (!this.p2.alive) drawDownMarker(ctx, this.p2, 'P2');
+    }
+    if (this.p1) {
+      this.p1.draw(ctx, game);
+      // a downed hero draws nothing, and the partner still needs to find it
+      if (!this.p1.alive) drawDownMarker(ctx, this.p1, 'P1');
+    }
 
     // bullets, drawn where the dead-reckoning puts them this frame
     const bs = this.bulletList || [];

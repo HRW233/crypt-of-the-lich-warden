@@ -256,6 +256,22 @@ function drawDashMeter(ctx, p, x, y, w, time) {
   }
 }
 
+/* A downed hero draws nothing at all, so in co-op its owner would vanish from
+   the other screen. A small cross and a countdown keep it findable. */
+function drawDownMarker(ctx, p, label) {
+  const x = Math.round(p.x);
+  const y = Math.round(p.y);
+  ctx.globalAlpha = 0.8;
+  ctx.fillStyle = C.heart;
+  ctx.fillRect(x - 6, y - 1, 13, 2);
+  ctx.fillRect(x - 1, y - 6, 2, 13);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#120b1c';
+  ctx.fillRect(x - 1, y - 1, 2, 2);
+  const count = p.reviveT > 0 ? label + ' ' + Math.max(1, Math.ceil(p.reviveT)) : label + ' DOWN';
+  Text.draw(ctx, count, x, y - 15, C.heart, 1, 'center');
+}
+
 function drawRelicSlots(ctx, relics, x, y, max, hover, time) {
   for (let i = 0; i < max; i++) {
     const sx = x + i * 18;
@@ -519,7 +535,7 @@ function inRect(px, py, r) {
 }
 
 const FINAL_FLOOR = 5;
-const BUILD_TAG = 'v4.49';
+const BUILD_TAG = 'v4.50';
 const RECORD_KEY = 'lichwarden.records.v1';
 
 const RECORD_DEFAULTS = {
@@ -3047,6 +3063,13 @@ class Game {
       }
     }
     if (this.player) this.player.draw(ctx, this);
+    if (this.player && !this.player.alive) drawDownMarker(ctx, this.player, 'P1');
+    /* The host simulates the partner's hero, so it has to draw it too: without
+       this the guest was a HUD row and nothing else on this screen. */
+    if (this.coop && this.player2) {
+      this.player2.draw(ctx, this);
+      if (!this.player2.alive) drawDownMarker(ctx, this.player2, 'P2');
+    }
 
     this.drawBeams(ctx);
     this.bullets.draw(ctx);
