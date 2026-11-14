@@ -265,7 +265,9 @@ const NET = {
       this.rtcOffer(game);
     }
     this.snapT += dt;
-    const step = 1 / NET_SNAP_HZ;
+    // a direct link costs nothing per message, so it can run faster than the
+    // relay path without any quota behind it
+    const step = 1 / (this.p2pOpen() ? 30 : NET_SNAP_HZ);
     if (this.snapT >= step) {
       this.snapT = 0;
       if (this.guestHere) this.sendSnapshot(game);
@@ -298,19 +300,18 @@ const NET = {
         e.id | 0,
       ]);
     }
+    /* Bullets are most of a snapshot, and at 30 Hz the bytes are what a slow
+       link queues up. Packed as text rather than JSON arrays: no brackets, no
+       quotes, no '#', roughly a third off. */
     const bulletRecs = [];
     for (let i = 0; i < bullets.length && i < 420; i++) {
       const b = bullets[i];
       // velocity lets the guest run bullets forward between snapshots
-      bulletRecs.push([
-        Math.round(b.x),
-        Math.round(b.y),
-        b.r,
-        b.color,
-        b.friendly ? 1 : 0,
-        Math.round(b.vx),
-        Math.round(b.vy),
-      ]);
+      bulletRecs.push(
+        Math.round(b.x) + ',' + Math.round(b.y) + ',' + b.r + ',' +
+        String(b.color).replace('#', '') + ',' + (b.friendly ? 1 : 0) + ',' +
+        Math.round(b.vx) + ',' + Math.round(b.vy)
+      );
     }
     this.post({
       t: 'snap',
@@ -321,7 +322,7 @@ const NET = {
         p1: encodePlayer(game.player),
         p2: encodePlayer(game.player2),
         e: enemyRecs,
-        b: bulletRecs,
+        b: bulletRecs.join(';'),
         bn: game.roomBanner ? game.roomBanner.text : '',
         to: game.toast ? game.toast.text : '',
         locked: room.locked ? 1 : 0,
@@ -598,9 +599,17 @@ const NET = {
     this.snapAge += dt;
     this.inputT += dt;
     this.follow(game, dt);
-    if (this.inputT >= (this.hosted && !this.p2pOpen() ? 0.1 : 1 / NET_INPUT_HZ)) {
+    // the direct link carries input at frame rate: it is a few dozen bytes
+    const inputHz = this.p2pOpen() ? 60 : (this.hosted ? 10 : NET_INPUT_HZ);
+    if (this.inputT >= 1 / inputHz) {
       this.inputT = 0;
       this.sendInput(game);
+    }
+    // a round trip, once a second, is what the lead above is built from
+    this.pingT = (this.pingT || 0) + dt;
+    if (this.pingT >= 1 && this.p2pOpen()) {
+      this.pingT = 0;
+      this.post({ t: 'ping', d: { s: performance.now() } });
     }
     if (this.view && this.view.room) {
       const room = this.view.room;
@@ -896,6 +905,9 @@ const NET = {
         this.rtcOffer(game);
       } else if (m.t === 'rtc') {
         this.rtcSignal(game, d || {});
+      } else if (m.t === 'ping') {
+        this.lastSeenFromGuest = performance.now();
+        this.post({ t: 'pong', d: d });
       } else if (m.t === 'in') {
         this.lastSeenFromGuest = performance.now();
         // a guest that comes back after a dropout rejoins automatically
@@ -916,6 +928,10 @@ const NET = {
     // guest
     if (m.t === 'rtc') {
       this.rtcSignal(game, d || {});
+      return;
+    }
+    if (m.t === 'pong') {
+      this.onPong(d || {});
       return;
     }
     if (m.t === 'room') {
@@ -981,6 +997,7 @@ const NET = {
 
     this.fakeRoom.depth = v.floor;
     this.fakeRoom.floor = v.floor;
+    const nowMs = performance.now();
     const alive = new Set();
     for (const rec of d.e || []) {
       const [type, x, y, hp, mhp, st, slow, burn, id] = rec;
@@ -992,7 +1009,17 @@ const NET = {
         e.y = y;
         this.enemyById.set(id, e);
       }
-      // the snapshot is the target; the drawn position eases toward it
+      /* The snapshot is a position from one trip ago, so the target the view
+         aims at is that position plus where it has been heading since. The
+         velocity comes from the last two snapshots. */
+      if (typeof e.tx === 'number' && e.atMs) {
+        const dts = Math.max(0.008, (nowMs - e.atMs) / 1000);
+        e.vx = (x - e.tx) / dts;
+        e.vy = (y - e.ty) / dts;
+        // a spawn or a blink is not a velocity
+        if (Math.hypot(e.vx, e.vy) > 900) { e.vx = 0; e.vy = 0; }
+      }
+      e.atMs = nowMs;
       e.tx = x;
       e.ty = y;
       e.hp = hp;
@@ -1011,9 +1038,35 @@ const NET = {
     }
     this.enemyList = Array.from(this.enemyById.values());
     v.enemies = this.enemyList;
-    v.bullets = d.b || [];
-    this.syncBullets(d.b || []);
+    const bl = this.unpackBullets(d.b);
+    v.bullets = bl;
+    this.syncBullets(bl);
     this.snapAge = 0;
+  },
+
+  unpackBullets(s) {
+    if (Array.isArray(s)) return s;
+    const out = [];
+    if (typeof s !== 'string' || !s) return out;
+    const parts = s.split(';');
+    for (let i = 0; i < parts.length; i++) {
+      const f = parts[i].split(',');
+      if (f.length < 7) continue;
+      out.push([+f[0], +f[1], +f[2], '#' + f[3], +f[4], +f[5], +f[6]]);
+    }
+    return out;
+  },
+
+  /* One trip's worth of lead, from a ping the host echoes. Half a round trip
+     is exactly how far behind the host's world a snapshot is when it lands. */
+  lead() {
+    return Math.min(0.25, (this.rtt || 0) / 2000);
+  },
+
+  onPong(d) {
+    if (!d || typeof d.s !== 'number') return;
+    const rtt = performance.now() - d.s;
+    if (rtt >= 0 && rtt < 4000) this.rtt = this.rtt ? this.rtt * 0.7 + rtt * 0.3 : rtt;
   },
 
   /* Bullets move in straight lines most of the time, so the guest runs each
@@ -1042,7 +1095,10 @@ const NET = {
   /* Per-frame view work on the guest: predict its own hero, ease everyone
      else toward the last snapshot, run bullets forward. */
   follow(game, dt) {
-    const k = 1 - Math.exp(-dt * 20);
+    // a stiffer ease reads as the host's movement rather than a trail of it;
+    // the leading term above supplies the distance the ease would lose
+    const k = 1 - Math.exp(-dt * 26);
+    const lead = this.lead();
 
     const p1 = this.p1;
     if (p1 && typeof p1.tx === 'number') {
@@ -1051,8 +1107,8 @@ const NET = {
     }
     for (const e of this.enemyList) {
       if (typeof e.tx !== 'number') continue;
-      e.x += (e.tx - e.x) * k;
-      e.y += (e.ty - e.y) * k;
+      e.x += ((e.tx + (e.vx || 0) * lead) - e.x) * k;
+      e.y += ((e.ty + (e.vy || 0) * lead) - e.y) * k;
     }
 
     const p2 = this.p2;
@@ -1068,7 +1124,9 @@ const NET = {
 
     const now = performance.now();
     for (const b of this.bulletList) {
-      const age = Math.min(0.12, (now - b.at) / 1000);
+      // run them on by the trip time too, so they are drawn where the host has
+      // them now rather than where they were when the packet left
+      const age = Math.min(0.3, (now - b.at) / 1000 + lead);
       b.rx = b.x + b.vx * age;
       b.ry = b.y + b.vy * age;
     }
