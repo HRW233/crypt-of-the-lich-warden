@@ -1069,10 +1069,28 @@ const NET = {
         if (v.boss.name) boss.name = v.boss.name;
         // the telegraph: same state, same move, same point in the wind-up
         boss.state = v.boss.state;
-        boss.attack = v.boss.attack;
-        boss.attackT = v.boss.attackT;
         boss.staffGlow = v.boss.staffGlow;
         boss.rot = v.boss.rot;
+        /* attackT climbs on the host every frame, so hopping the guest to each
+           snapshot value made the wind-up stutter. Learn the host's climb rate
+           from two snapshots and let the guest climb the same way in between. */
+        const t = v.boss.attackT;
+        const prev = boss.wind;
+        if (
+          v.boss.state === 'attack' && v.boss.attack === boss.attack && prev &&
+          t > prev.t && nowMs > prev.at
+        ) {
+          const rate = (t - prev.t) / ((nowMs - prev.at) / 1000);
+          if (rate > 0.2 && rate < 8) boss.windRate = boss.windRate ? boss.windRate * 0.7 + rate * 0.3 : rate;
+        }
+        boss.wind = { t, at: nowMs };
+        boss.windGoal = t;
+        // a new move starts where the host says, not part-way through
+        if (v.boss.attack !== boss.attack || v.boss.state !== 'attack') {
+          boss.attackT = t;
+          boss.windRate = 0;
+        }
+        boss.attack = v.boss.attack;
       }
     }
     const bl = this.unpackBullets(d.b);
@@ -1170,6 +1188,11 @@ const NET = {
     for (const e of this.enemyList) {
       // idle animation and flashes run on the guest too
       e.t = (e.t || 0) + dt;
+      /* A boss's wind-up keeps climbing between snapshots instead of being
+         pinned until the next one, so its telegraph animates at frame rate. */
+      if (e.isBoss && e.state === 'attack' && typeof e.windGoal === 'number' && e.attackT < e.windGoal) {
+        e.attackT = Math.min(e.windGoal, e.attackT + (e.windRate || 1.8) * dt);
+      }
       const s = this.sampleHist(e.hist, now, gap);
       if (!s) continue;
       e.x = s.x;
