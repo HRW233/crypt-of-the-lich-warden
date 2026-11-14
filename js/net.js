@@ -713,7 +713,16 @@ const NET = {
       }
     };
     ch.onmessage = (ev) => {
-      try { this.handle(game, JSON.parse(ev.data)); } catch (err) { /* junk frame */ }
+      try {
+        this.handle(game, JSON.parse(ev.data));
+      } catch (err) {
+        /* A throw in here would otherwise vanish and the game would just stop
+           updating, so it is reported once rather than thirty times a second. */
+        if (!this.msgErr) {
+          this.msgErr = true;
+          console.error('co-op message failed:', err);
+        }
+      }
     };
     ch.onclose = () => { if (this.p2p === ch) this.rtcDrop(); };
   },
@@ -965,6 +974,7 @@ const NET = {
 
   applySnapshot(game, d) {
     const v = this.view || (this.view = {});
+    const nowMs = performance.now();
     v.state = d.s;
     v.pv = d.pv || [0, 0];
     v.boss = d.bs
@@ -990,7 +1000,6 @@ const NET = {
 
     this.fakeRoom.depth = v.floor;
     this.fakeRoom.floor = v.floor;
-    const nowMs = performance.now();
     // how far apart snapshots actually arrive: the guest renders that far back
     if (this.lastSnapAt) {
       const gap = nowMs - this.lastSnapAt;
@@ -1049,30 +1058,34 @@ const NET = {
     return out;
   },
 
-  /* Where a remote thing was at a given moment, from the history its snapshots
-     built. Between two samples it is a straight line, so a lerp is exact; just
-     past the newest one there is a short extrapolation, capped so a stalled
-     host cannot fling anything across the room. */
-  sampleHist(hist, rt) {
+  /* Where a remote thing is being drawn, from the history its snapshots built.
+
+     The samples are spaced by their *index*, not by the wall clock when the
+     browser got round to them: a busy frame can deliver three snapshots in the
+     same millisecond, and timing by arrival would then have nothing to
+     interpolate and would freeze until the next one. Index spacing keeps the
+     motion even no matter how the packets were batched. */
+  sampleHist(hist, now, gap) {
     if (!hist || !hist.length) return null;
     if (hist.length === 1) return { x: hist[0].x, y: hist[0].y };
     const last = hist[hist.length - 1];
-    if (rt >= last.t) {
-      const prev = hist[hist.length - 2];
-      const span = Math.max(8, last.t - prev.t);
-      const over = Math.min(80, rt - last.t) / span;
+    const newest = hist.length - 1;
+    // samples since the newest arrived, minus a bit more than one snapshot of
+    // buffer to absorb a late packet
+    const pos = newest + (now - last.t) / gap - 1.25;
+    if (pos >= newest) {
+      // past the buffer: extrapolate from the last two, briefly
+      const prev = hist[newest - 1];
+      const over = Math.min(1.5, pos - newest);
       return { x: last.x + (last.x - prev.x) * over, y: last.y + (last.y - prev.y) * over };
     }
-    for (let i = hist.length - 1; i > 0; i--) {
-      const a = hist[i - 1];
-      const b = hist[i];
-      if (a.t <= rt) {
-        const span = Math.max(1, b.t - a.t);
-        const k = Math.max(0, Math.min(1, (rt - a.t) / span));
-        return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
-      }
-    }
-    return { x: hist[0].x, y: hist[0].y };
+    if (pos <= 0) return { x: hist[0].x, y: hist[0].y };
+    const i0 = Math.floor(pos);
+    const i1 = Math.min(newest, i0 + 1);
+    const f = pos - i0;
+    const a = hist[i0];
+    const b = hist[i1];
+    return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
   },
 
   /* Bullets move in straight lines, so the guest runs each one from the
@@ -1106,19 +1119,20 @@ const NET = {
     // render a little more than one snapshot back: enough that a packet
     // arriving a few milliseconds late still has both samples to interpolate
     const gap = Math.max(16, Math.min(200, this.snapGap || 40));
-    const rt = now - Math.min(150, gap * 1.25);
+    const delay = gap * 1.25;
+    const rt = now - delay;
     this.renderAt = rt;
 
     const p1 = this.p1;
     if (p1) {
-      const s = this.sampleHist(p1.hist, rt);
+      const s = this.sampleHist(p1.hist, now, gap);
       if (s) {
         p1.x = s.x;
         p1.y = s.y;
       }
     }
     for (const e of this.enemyList) {
-      const s = this.sampleHist(e.hist, rt);
+      const s = this.sampleHist(e.hist, now, gap);
       if (!s) continue;
       e.x = s.x;
       e.y = s.y;
@@ -1136,11 +1150,10 @@ const NET = {
     }
 
     for (const b of this.bulletList) {
-      /* The same render clock as the enemies. "at" is when the snapshot
-         arrived, which is later than the moment being drawn, so the age is
-         usually negative: that is the bullet's exact earlier position on a
-         straight line, and it keeps the two in step. */
-      const age = Math.max(-0.25, Math.min(0.3, (rt - b.at) / 1000));
+      /* The same render clock as the enemies: one and a quarter snapshots back
+         from when its snapshot arrived. On a straight line that is exact, and
+         it keeps bullets and enemies agreeing about where things are. */
+      const age = Math.max(-0.3, Math.min(0.3, (now - b.at - delay) / 1000));
       b.rx = b.x + b.vx * age;
       b.ry = b.y + b.vy * age;
     }
