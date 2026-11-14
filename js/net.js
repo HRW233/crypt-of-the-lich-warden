@@ -300,6 +300,7 @@ const NET = {
         e.id | 0,
         // a boss carries its class, so the guest can build the real thing
         bossKind(e),
+        posePack(e),
       ]);
     }
     /* Bullets are most of a snapshot, and at 30 Hz the bytes are what a slow
@@ -1023,7 +1024,7 @@ const NET = {
     this.lastSnapAt = nowMs;
     const alive = new Set();
     for (const rec of d.e || []) {
-      const [type, x, y, hp, mhp, st, slow, burn, id, kind] = rec;
+      const [type, x, y, hp, mhp, st, slow, burn, id, kind, pose] = rec;
       alive.add(id);
       let e = this.enemyById.get(id);
       // a boss arrives as a class name, not a kind: rebuild it as itself
@@ -1051,6 +1052,31 @@ const NET = {
       e.burnT = burn > 0 ? 0.6 : 0;
       e.spawnT = 0;
       e.dead = false;
+      /* Wind-up poses (a bow being drawn, a cooldown running out, a crystal
+         turning) climb between snapshots like the boss's does. */
+      if (pose) {
+        const p = pose.split(',');
+        const goal = [+p[0] || 0, +p[1] || 0, +p[2] || 0];
+        if (!e.pose) e.pose = e.posePrev ? e.posePrev.slice() : goal.slice();
+        if (!e.poseRate) e.poseRate = [0, 0, 0];
+        if (e.poseGoal && e.posePrev && nowMs > e.poseAt) {
+          /* Below the snapshot interval the samples are a burst, not a climb:
+             measuring a rate from those divides by almost nothing and makes
+             the next frames leap. */
+          const dtS = (nowMs - e.poseAt) / 1000;
+          if (dtS >= 0.02) {
+            for (let i = 0; i < 3; i++) {
+              const rate = (goal[i] - e.posePrev[i]) / dtS;
+              if (Math.abs(rate) < 20) e.poseRate[i] = e.poseRate[i] * 0.7 + rate * 0.3;
+            }
+          }
+        }
+        e.poseGoal = goal;
+        e.posePrev = goal.slice();
+        e.poseAt = nowMs;
+      } else if (!kind) {
+        e.poseGoal = null;
+      }
     }
     for (const [id, e] of this.enemyById) {
       if (!alive.has(id)) this.enemyById.delete(id);
@@ -1192,6 +1218,23 @@ const NET = {
          pinned until the next one, so its telegraph animates at frame rate. */
       if (e.isBoss && e.state === 'attack' && typeof e.windGoal === 'number' && e.attackT < e.windGoal) {
         e.attackT = Math.min(e.windGoal, e.attackT + (e.windRate || 1.8) * dt);
+      }
+      /* Ordinary enemies get the same treatment: their pose progress moves
+         toward the host's last reported value at the rate the host moves it,
+         so a drawn bow turns gradually instead of ticking 30 times a second. */
+      if (e.pose && e.poseGoal) {
+        for (let i = 0; i < 3; i++) {
+          const g = e.poseGoal[i];
+          const want = g - e.pose[i];
+          if (!want) continue;
+          /* Capped: a long frame (or a pose that just appeared) should catch up
+             over a few frames, not swallow the whole wind-up at once. */
+          const step = Math.min(0.1, Math.max(Math.abs(e.poseRate[i] || 0) * dt, Math.abs(want) * Math.min(1, dt * 12)));
+          e.pose[i] += Math.sign(want) * Math.min(Math.abs(want), step);
+        }
+        e.aimT = e.pose[0];
+        e.timer = e.pose[1];
+        e.spin = e.pose[2];
       }
       const s = this.sampleHist(e.hist, now, gap);
       if (!s) continue;
@@ -1608,6 +1651,19 @@ function bossRec(room) {
     r2(boss.rot),
     r2(boss.spawnT),
   ];
+}
+
+/* The pose progress ordinary enemies draw their attacks from. Bosses run their
+   own record, so they are left out here. Empty when an enemy is not mid-move,
+   which is most of them most of the time. */
+function posePack(e) {
+  if (bossKind(e)) return '';
+  const r2 = (v) => Math.round((v || 0) * 100) / 100;
+  const aim = e.aimT || 0;
+  const timer = e.timer || 0;
+  const spin = e.spin || 0;
+  if (!aim && !timer && !spin) return '';
+  return r2(aim) + ',' + r2(timer) + ',' + r2(spin);
 }
 
 function encodeRoom(game, room) {
